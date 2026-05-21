@@ -17,7 +17,7 @@ A single-GPU pipeline for detecting RFI stripes in Sentinel-1 quicklooks. It com
 | | |
 |---|---|
 | **Final score** | **0.4776** mAP@[.50:.05:.95] on the held-out test set |
-| **Leaderboard** | **28th of 120** teams (public) |
+| **Leaderboard** | **28th of 172** teams (public) |
 | **Compute** | one cloud NVIDIA A100, 15 fine-tuning epochs/fold |
 | **Gain over per-fold baseline** | **+0.077** mAP (meta-validation ablation) |
 
@@ -26,6 +26,11 @@ A single-GPU pipeline for detecting RFI stripes in Sentinel-1 quicklooks. It com
 ---
 
 ## The challenge
+
+<p align="center">
+  <img src="docs/rfi_schematic.svg" width="560" alt="RFI detection schematic">
+  <br><sub><b>Schematic illustration</b> (not a real detection — the ESA dataset is license-restricted). RFI appears as thin, near-full-width horizontal stripes; the detector localises each with a bounding box.</sub>
+</p>
 
 ClearSAR Track 1 frames RFI detection as COCO-style object detection. RFI appears as thin horizontal stripes in variable-size Sentinel-1 RGB quicklooks (median ≈515×342 px):
 
@@ -79,6 +84,12 @@ Documented because they cost real compute and may save someone else theirs:
 | Inference-only SAHI, 320-px tiles | −0.085 — fragments long stripes |
 | Temperature-scaled calibration | ≤ +0.0002 — teacher already calibrated |
 | Horizontal-flip TTA | −6.5 % — SAR geometry is asymmetric |
+
+## Limitations (honest notes)
+
+- **Not end-to-end reproducible.** The dataset (ESA EOTDL, license-restricted), the trained weights, and the V12 teacher checkpoint are **not** included — so this repo does not regenerate 0.4776 out of the box. It is the method, code, and writeup, not a one-command reproduction.
+- **Competition-grade code, not a library.** The scripts are argparse CLIs with no test suite or package structure — fit for a challenge entry, not a production / software-engineering portfolio piece.
+- **Mid-pack result, stated plainly.** 28th of 172 is below the top entries (#1 ≈ 0.5057). The value here is the methodology and the documented negative results, not the leaderboard position.
 
 ## Repository structure
 

@@ -22,4 +22,4 @@ abstract: >-
   Normalised Wasserstein Distance loss, pseudo-label distillation from a
   multi-source ensemble teacher, multi-resolution test-time augmentation
   fused by Weighted Box Fusion, and a selective cross-fold ensemble.
-  Reaches 0.4776 mAP@[.50:.05:.95] on the held-out test set, 28th of 120 teams.
+  Reaches 0.4776 mAP@[.50:.05:.95] on the held-out test set, 28th of 172 teams.
