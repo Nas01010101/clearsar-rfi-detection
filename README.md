@@ -17,7 +17,7 @@ A single-GPU pipeline for detecting RFI stripes in Sentinel-1 quicklooks. It com
 | | |
 |---|---|
 | **Final score** | **0.4776** mAP@[.50:.05:.95] on the held-out test set |
-| **Leaderboard** | **28th of 172** teams (public) |
+| **Leaderboard** | **28th of 172** entrants |
 | **Compute** | one cloud NVIDIA A100, 15 fine-tuning epochs/fold |
 | **Gain over per-fold baseline** | **+0.077** mAP (meta-validation ablation) |
 
@@ -89,7 +89,7 @@ Documented because they cost real compute and may save someone else theirs:
 
 - **Not end-to-end reproducible.** The dataset (ESA EOTDL, license-restricted), the trained weights, and the V12 teacher checkpoint are **not** included — so this repo does not regenerate 0.4776 out of the box. It is the method, code, and writeup, not a one-command reproduction.
 - **Competition-grade code, not a library.** The scripts are argparse CLIs with no test suite or package structure — fit for a challenge entry, not a production / software-engineering portfolio piece.
-- **Mid-pack result, stated plainly.** 28th of 172 is below the top entries (#1 ≈ 0.5057). The value here is the methodology and the documented negative results, not the leaderboard position.
+- **Mid-pack result, stated plainly.** 28th of 172 entrants (≈120 teams appeared on the public leaderboard); below the top entries (#1 ≈ 0.5057). The value here is the methodology and the documented negative results, not the leaderboard position.
 
 ## Repository structure
 
