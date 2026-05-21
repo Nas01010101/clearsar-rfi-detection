@@ -3,6 +3,7 @@ Convert ClearSAR COCO annotations to YOLO format.
 Also creates 5-fold cross-validation splits.
 """
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -113,7 +114,6 @@ names: ['RFI']
 
 
 if __name__ == "__main__":
-    import os
+    # Run from the repo root so the hardcoded data/ paths resolve.
     os.chdir(Path(__file__).parent.parent)
-    from sklearn.model_selection import KFold
     main()

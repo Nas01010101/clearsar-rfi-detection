@@ -1,6 +1,13 @@
 """
-Train YOLO26 on ClearSAR with MLflow tracking.
-Usage: python scripts/train_yolo.py [--fold 0] [--model yolo26x.pt] [--epochs 100] [--imgsz 640]
+Train a YOLO detector on ClearSAR RFI data.
+
+SAR-specific choices are baked in: no flips/HSV (azimuth-aligned geometry),
+upweighted box loss for thin stripes, and an optional pixel-space NWD loss
+(--nwd-loss) for tiny-object regression. MLflow tracks runs by default
+(--no-mlflow to disable), with optional post-train COCO eval on a val set.
+
+Usage: python scripts/train_yolo.py [--fold 0] [--model yolo26x.pt]
+       [--epochs 120] [--imgsz 640] [--optimizer MuSGD] [--nwd-loss]
 """
 import argparse
 import contextlib
@@ -144,16 +151,6 @@ def apply_nwd_loss_patch(alpha: float, c: float) -> None:
     module.apply_nwd_patch(alpha=alpha, c=c)
 
 
-def apply_qfl_loss_patch(gamma: float, alpha: float) -> None:
-    patch_path = Path(__file__).resolve().parent / "qfl_loss_patch.py"
-    spec = importlib.util.spec_from_file_location("clearsar_qfl_loss_patch", patch_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load QFL patch from {patch_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.apply_qfl_patch(gamma=gamma, alpha=alpha)
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--fold", type=int, default=0)
@@ -215,10 +212,6 @@ def main():
                         help="Weight on pixel-space NWD in blended box loss (0=pure CIoU, 1=pure NWD)")
     parser.add_argument("--nwd-c", type=float, default=12.8,
                         help="Pixel-space NWD normalization constant")
-    parser.add_argument("--qfl-loss", action="store_true",
-                        help="Opt-in Varifocal/quality-focal class loss using assigner target_scores")
-    parser.add_argument("--qfl-gamma", type=float, default=2.0)
-    parser.add_argument("--qfl-alpha", type=float, default=0.75)
     parser.add_argument(
         "--v12-baseline",
         type=float,
@@ -227,7 +220,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # os.chdir(Path(__file__).parent.parent)
     device = args.device or get_device()
     print(f"Device: {device}")
 
@@ -274,9 +266,6 @@ def main():
         "nwd_loss": args.nwd_loss,
         "nwd_alpha": args.nwd_alpha,
         "nwd_c": args.nwd_c,
-        "qfl_loss": args.qfl_loss,
-        "qfl_gamma": args.qfl_gamma,
-        "qfl_alpha": args.qfl_alpha,
     }
 
     wandb_run = maybe_start_wandb(args, run_config)
@@ -305,10 +294,6 @@ def main():
         if args.nwd_loss:
             apply_nwd_loss_patch(alpha=args.nwd_alpha, c=args.nwd_c)
             print(f"[nwd] pixel-space NWD loss patch applied alpha={args.nwd_alpha} C={args.nwd_c}", flush=True)
-        if args.qfl_loss:
-            apply_qfl_loss_patch(gamma=args.qfl_gamma, alpha=args.qfl_alpha)
-            print(f"[qfl] varifocal class-loss patch applied gamma={args.qfl_gamma} alpha={args.qfl_alpha}", flush=True)
-
         # One-line recipe manifest — makes silent default shifts (optimizer/box/mixup/
         # translate/scale) visible in any log scrape. Defaults moved to pseudo-FT recipe;
         # legacy V5.5 callers must pin these explicitly.
@@ -317,8 +302,7 @@ def main():
             f"freeze={args.freeze} box={args.box} mixup={args.mixup} "
             f"translate={args.translate} scale={args.scale} "
             f"copy_paste_rfi={args.copy_paste_rfi} nwd={args.nwd_loss} "
-            f"(alpha={args.nwd_alpha} C={args.nwd_c}) qfl={args.qfl_loss} "
-            f"(gamma={args.qfl_gamma} alpha={args.qfl_alpha})",
+            f"(alpha={args.nwd_alpha} C={args.nwd_c})",
             flush=True,
         )
 

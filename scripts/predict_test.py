@@ -2,7 +2,7 @@
 Local MPS inference of one fold's weights on the 786 test images.
 Writes COCO-format detections at conf>=0.001, imgsz=640.
 """
-import argparse, json, sys, time
+import argparse, json, time
 from pathlib import Path
 from ultralytics import YOLO
 import torch

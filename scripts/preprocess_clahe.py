@@ -1,28 +1,30 @@
+"""
+CLAHE contrast enhancement for ClearSAR quicklooks.
+
+SAR quicklooks have low local contrast, so thin RFI stripes blend into the
+speckle background. Contrast-Limited Adaptive Histogram Equalisation on the
+LAB luminance channel sharpens those stripes locally without blowing out the
+global background (clipLimit=3.0, tileGridSize=(8,8) matched the final recipe).
+Run from the repo root; outputs mirror the input layout under data/yolo_clahe/.
+"""
 import cv2
 import os
-import glob
 from pathlib import Path
 from tqdm import tqdm
 
+
 def apply_clahe(img_path, out_path):
-    # Read image
+    """Apply CLAHE to the L (luminance) channel of one image and save it."""
     img = cv2.imread(str(img_path))
     if img is None:
         return
-    
-    # Convert to LAB color space
+    # Work in LAB so contrast is boosted on luminance only, leaving chroma intact.
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
-    
-    # Apply CLAHE to L-channel
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     cl = clahe.apply(l)
-    
-    # Merge channels and convert back to BGR
-    limg = cv2.merge((cl,a,b))
+    limg = cv2.merge((cl, a, b))
     final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-    
-    # Save
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     cv2.imwrite(str(out_path), final)
 

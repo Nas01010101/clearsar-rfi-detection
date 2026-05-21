@@ -6,7 +6,6 @@ Outputs: mAP50-95, mAP50, mAP75, AP_small/medium/large
 import argparse
 import json
 import os
-import sys
 import tempfile
 
 

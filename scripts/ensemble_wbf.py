@@ -25,7 +25,6 @@ import argparse, json
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 from ensemble_boxes import weighted_boxes_fusion
 
