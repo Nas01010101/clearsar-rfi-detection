@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Data & model weights (not redistributable — ESA EOTDL terms)
+data/
+runs/
+*.pt
+*.pth
+
+# LaTeX build artifacts (keep .tex and .pdf)
+*.aux
+*.out
+*.log
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.toc
+*.bbl
+*.blg
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

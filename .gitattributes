@@ -1,0 +1,3 @@
+# Documentation — keep out of language stats so the repo reads as Python
+docs/**     linguist-documentation
+*.tex       linguist-documentation

@@ -1,0 +1,248 @@
+% ICIP 2026 Grand Challenge — ClearSAR Track 1
+% Two-page extended abstract (spconf.sty + IEEEbib.bst, per author kit)
+
+\documentclass{article}
+\usepackage{spconf,amsmath,amssymb,graphicx,booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+
+\title{RFI DETECTION IN SENTINEL-1 SAR IMAGERY VIA PSEUDO-LABEL
+DISTILLATION AND MULTI-RESOLUTION ENSEMBLE}
+
+\name{Anas Elghoudane}
+\address{Independent Researcher (\emph{UdeM AI} team)\\
+\texttt{anaselghoudane@gmail.com}}
+
+\begin{document}
+\ninept
+\maketitle
+
+\begin{abstract}
+We describe the \emph{UdeM AI} team's solution to the ESA ClearSAR
+Track 1 Grand Challenge: Radio-Frequency Interference (RFI) detection
+in Sentinel-1 SAR quicklooks. Our pipeline combines a YOLO26x base
+detector with pixel-space Normalised Wasserstein Distance (NWD)
+regression, pseudo-label distillation from a multi-source ensemble
+teacher onto unlabelled test imagery, multi-resolution test-time
+augmentation (TTA) fused by Weighted Box Fusion (WBF), and a selective
+cross-fold ensemble that drops the domain-overlapping fold. Ablation
+on a 401-image leak-isolated meta-validation set shows
+pseudo-distillation contributes $+0.041$ mAP$_{50\text{-}95}$ over the
+per-fold baseline, multi-resolution TTA adds $+0.034$, and selective
+fold dropping adds $+0.002$, for a total $+0.077$ over the per-fold
+meta-validation baseline. The final submission reaches 0.4776
+mAP$_{50\text{-}95}$ on the held-out test set, placing 28th of 120
+teams. All training and fine-tuning used a single cloud NVIDIA A100
+GPU.
+\end{abstract}
+
+\begin{keywords}
+Ensemble, pseudo-label distillation, radio-frequency interference,
+SAR imagery, small object detection.
+\end{keywords}
+
+\section{TASK AND DATA}
+\label{sec:task}
+
+The ESA ClearSAR Track~1 Grand Challenge \cite{clearsar2026} frames
+RFI detection in Sentinel-1 quicklooks as a COCO-style object
+detection task with mAP averaged over IoU 0.50--0.95. The labelled
+set contains 3{,}154 images; 786 test images are held out by the
+organisers and scored by the challenge platform from a zipped
+COCO-format JSON of detections. RFI appears as thin horizontal stripes (median height
+$\approx$10\,px, median width $\approx$140\,px) in variable-size RGB
+quicklooks (median $\approx$515$\times$342\,px), with a median
+per-box aspect ratio of $\approx$8:1. Three constraints follow:
+IoU-based regression gives no gradient for non-overlapping thin boxes;
+SAR side-looking geometry breaks horizontal symmetry, so flip TTA is
+disabled (H-flip costs $-6.5\%$ \cite{oliver2004sar}); and inference
+resolutions above 640\,px amplify speckle relative to signal. We
+reserve a leak-isolated meta-validation set of 401 images sampled
+from the fold-0 validation pool (seed 42) for honest local
+evaluation.
+
+\section{METHOD}
+\label{sec:method}
+
+\begin{figure*}[t]
+\centering
+\setlength{\fboxsep}{3pt}
+\scriptsize
+\begin{tabular}{@{}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{}}
+\fbox{\parbox[c][12mm][c]{17mm}{\centering YOLO26x base\\5 folds\\CLAHE\,+\,NWD}} &
+\fbox{\parbox[c][12mm][c]{15mm}{\centering V12 teacher\\WBF\\ensemble}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Pseudo-label\\786 test imgs\\conf\,$\ge$\,0.75}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Student FT\\$f\!\in\!\{1,2,4\}$\\freeze 10}} &
+\fbox{\parbox[c][12mm][c]{18mm}{\centering Multi-res TTA\\608/640/\\672/704\,+\,WBF}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Cross-fold WBF\\drop $f_0$\\$\to S^{*}$}} &
+\fbox{\parbox[c][12mm][c]{19mm}{\centering Blend $w{=}0.25$\\$S^{*}\!\oplus$\,V12\\$\to$ V17 (0.4776)}} \\
+\end{tabular}
+\caption{Pipeline. A YOLO26x base detector (CLAHE input, pixel-space
+NWD loss) is trained per fold; the V12 pre-distillation ensemble
+pseudo-labels the 786 test images; per-fold students are fine-tuned
+on the fold-augmented data, run multi-resolution TTA fused by WBF,
+fused across folds (dropping the domain-overlapping fold~0) into a
+super-source $S^{*}$, and blended with V12 at $w{=}0.25$.}
+\label{fig:pipeline}
+\end{figure*}
+
+The pipeline (Figure~\ref{fig:pipeline}) has four stages.
+
+\textbf{Base detector.} YOLO26x \cite{ultralytics2024yolo11}
+($\approx$55.7\,M parameters, COCO pre-trained, no P2 head) trained
+with a CIoU\,+\,NWD box loss
+$\mathcal{L}_{\mathrm{box}} = (1{-}\alpha)\mathcal{L}_{\mathrm{CIoU}}
+{+}\alpha\mathcal{L}_{\mathrm{NWD}}$ at $\alpha{=}0.5$, with NWD
+\cite{wang2021nwd} computed in pixel space (normalisation constant
+$C{=}12.8$\,px). Ultralytics' \texttt{BboxLoss.forward} receives
+boxes in stride-relative grid units, so we multiply by the anchor
+stride before computing NWD; this keeps gradients non-saturating for
+the small heights characteristic of RFI ($\approx$10\,px median).
+Images are pre-processed with CLAHE (clip 3.0, $8\times8$ tiles) on
+the LAB L-channel. Horizontal and vertical flips are disabled.
+Training uses MuSGD for up to 120 epochs (patience 20) at 640\,px,
+batch 16, $\eta_0{=}10^{-3}$ with cosine decay to $10^{-5}$.
+
+\textbf{Pseudo-label distillation.} The teacher (V12) is our
+strongest pre-distillation ensemble: a single-stage WBF
+\cite{solovyev2021wbf} over multiple YOLO26x fold and
+multi-resolution-TTA sources together with one RF-DETR-Large
+\cite{roboflow2024rfdetr} fold checkpoint at weight $1.5\times$,
+fused with $\tau{=}0.70$ and \texttt{conf\_type}=max. V12 scores
+0.4755 on the held-out test set. The teacher is applied to the 786
+unlabelled test images with confidence threshold 0.75 (max 20
+boxes/img), producing 600 pseudo-labelled images. For each fold
+$f\in\{1,2,4\}$, a student is fine-tuned from the per-fold base on
+the fold-augmented dataset with AdamW \cite{loshchilov2019adamw}
+($\eta_0{=}10^{-4}$, \texttt{freeze}=10, 15 epochs, batch 24, same
+NWD blend). Fold 0 is omitted because its base partition overlaps the
+meta-validation pool.
+
+\textbf{Multi-resolution TTA and fusion.} Each student is inferred at
+$\mathcal{I}=\{608,640,672,704\}$\,px; WBF across resolutions per
+fold yields one TTA source. The three per-fold TTA sources are then
+fused with equal weights into a super-source $S^{*}$. The final
+submission V17 is the two-source WBF blend $D_{\mathrm{final}} =
+\mathrm{WBF}(D_{\mathrm{V12}}, S^{*}; w{=}(1.0, 0.25), \tau{=}0.70)$.
+
+\section{RESULTS AND DISCUSSION}
+\label{sec:results}
+
+\begin{table}[t]
+\centering
+\caption{Component ablation on the 401-image meta-validation set.}
+\label{tab:ablation}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
+\midrule
+Per-fold baseline (fold 0)            & 0.394 & --- \\
++ Pseudo-FT, fold 4 only              & 0.435 & $+0.041$ \\
++ Multi-res TTA, fold 4 only          & 0.469 & $+0.034$ \\
++ 3-fold (drop $f_0$), equal weights  & 0.471 & $+0.002$ \\
++ V12 blend @ $w{=}0.25$ (V17)        & 0.471$^\dagger$ & --- \\
+\bottomrule
+\end{tabular}\\[2pt]
+{\scriptsize $^\dagger$Meta-val cannot exceed V12 by adding an honest
+source (V12 is leaked on this split). Official held-out test:
+\textbf{0.4776}.}
+\end{table}
+
+Table~\ref{tab:ablation} reports the component ablation.
+Pseudo-distillation contributed the largest single gain ($+0.041$):
+the soft signal in the teacher's confidence scores compensates for
+the small training set more effectively than the architectural
+alternatives we evaluated. Multi-resolution TTA added a further
+$+0.034$ because thin stripes a few pixels tall are resolved unevenly
+by YOLO's strided feature pyramid at any single input size. Dropping
+the domain-overlapping fold-0 from the cross-fold ensemble was
+net-positive: correlated predictions drag the WBF consensus when one
+source has seen the validation data during training. Blending the
+V12 teacher into the final fusion does not improve the leaked
+meta-val baseline but transfers cleanly to held-out test
+(V12 alone $= 0.4755 \to $ V17 $= 0.4776$).
+
+\textbf{Negative results.} A second architectural family (RF-DETR)
+plateaued at $+0.0002$ across six checkpoint--weight variants;
+D-FINE-X \cite{peng2024dfine} fine-tuned on fold~0 for 10 epochs
+reached $3\times10^{-4}$ mAP, suggesting DETR-family decoders with
+different matching \cite{huang2024deim} would need substantially
+more epochs to adapt to the elongated geometry of RFI; inference-only
+SAHI \cite{akyon2022sahi} at 320-px tiles regressed $-0.085$,
+fragmenting long horizontal stripes at tile boundaries; and
+temperature-scaled calibration was at most $+0.0002$.
+
+\section{CONCLUSION}
+\label{sec:conclusion}
+
+The final pipeline reaches 0.4776 mAP$_{50\text{-}95}$ on the
+held-out test set; the meta-validation ablation chain
+(Table~\ref{tab:ablation}) totals $+0.077$ over the per-fold
+baseline. The submission placed the \emph{UdeM AI} team 28th of 120
+teams on the public leaderboard of ESA ClearSAR Track~1. All training and fine-tuning were performed on
+a single cloud NVIDIA A100 GPU. The largest remaining gap is at high
+IoU thresholds, where sub-pixel height accuracy dominates and a
+640-px input under-resolves the median $\approx$10-px stripe; sliced
+\emph{training} at 320-px tiles is the most promising next move.
+
+\bibliographystyle{IEEEbib}
+\begin{thebibliography}{9}
+
+\bibitem{clearsar2026}
+European Space Agency,
+``ClearSAR Track 1: Radio-frequency interference detection in
+Sentinel-1 quicklook imagery,''
+Challenge specification, 2026.
+
+\bibitem{oliver2004sar}
+C.~Oliver and S.~Quegan,
+\emph{Understanding Synthetic Aperture Radar Images}.
+SciTech Publishing, 2004.
+
+\bibitem{ultralytics2024yolo11}
+G.~Jocher and J.~Qiu,
+``Ultralytics YOLO26,''
+\url{https://github.com/ultralytics/ultralytics}, 2026.
+
+\bibitem{wang2021nwd}
+J.~Wang, C.~Xu, W.~Yang, and L.~Yu,
+``A normalized Gaussian Wasserstein distance for tiny object
+detection,''
+\emph{arXiv:2110.13389}, 2021.
+
+\bibitem{solovyev2021wbf}
+R.~Solovyev, W.~Wang, and T.~Gabruseva,
+``Weighted boxes fusion,''
+\emph{Image and Vision Computing}, vol.~107, p.~104117, 2021.
+
+\bibitem{roboflow2024rfdetr}
+Roboflow,
+``RF-DETR: A real-time transformer-based object detector,''
+\url{https://github.com/roboflow/rf-detr}, 2024.
+
+\bibitem{loshchilov2019adamw}
+I.~Loshchilov and F.~Hutter,
+``Decoupled weight decay regularization,''
+in \emph{Proc. ICLR}, 2019.
+
+\bibitem{peng2024dfine}
+Y.~Peng, H.~Li, P.~Wu, Y.~Zhang, X.~Sun, and F.~Wu,
+``D-FINE: Redefine regression task of DETR as fine-grained
+distribution refinement,''
+\emph{arXiv:2410.13842}, 2024.
+
+\bibitem{huang2024deim}
+S.~Huang, Z.~Lu, X.~Cun, Y.~Yu, X.~Zhou, and X.~Shen,
+``DEIM: DETR with improved matching for fast convergence,''
+\emph{arXiv:2412.04234}, 2024.
+
+\bibitem{akyon2022sahi}
+F.~C. Akyon, S.~O. Altinuc, and A.~Temizel,
+``Slicing aided hyper inference and fine-tuning for small object
+detection,''
+in \emph{Proc. IEEE ICIP}, 2022, pp.~966--970.
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label Distillation and Multi-Resolution Ensemble"
+authors:
+  - family-names: Elghoudane
+    given-names: Anas
+year: 2026
+url: "https://github.com/Nas01010101/clearsar-rfi-detection"
+repository-code: "https://github.com/Nas01010101/clearsar-rfi-detection"
+license: MIT
+keywords:
+  - synthetic aperture radar
+  - radio-frequency interference
+  - small object detection
+  - pseudo-label distillation
+  - weighted box fusion
+  - ensemble
+abstract: >-
+  Solution to the ESA ClearSAR Track 1 Grand Challenge (Radio-Frequency
+  Interference detection in Sentinel-1 SAR quicklooks) at IEEE ICIP 2026.
+  A single-GPU pipeline combining a YOLO26x detector with pixel-space
+  Normalised Wasserstein Distance loss, pseudo-label distillation from a
+  multi-source ensemble teacher, multi-resolution test-time augmentation
+  fused by Weighted Box Fusion, and a selective cross-fold ensemble.
+  Reaches 0.4776 mAP@[.50:.05:.95] on the held-out test set, 28th of 120 teams.

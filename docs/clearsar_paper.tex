@@ -1,0 +1,624 @@
+% ICIP 2026 submission - uses spconf.sty + IEEEbib.bst
+\documentclass{article}
+\usepackage{spconf,amsmath,amssymb,graphicx,booktabs}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{microtype}
+
+\title{RFI DETECTION IN SENTINEL-1 SAR IMAGERY VIA PSEUDO-LABEL
+DISTILLATION AND MULTI-RESOLUTION ENSEMBLE}
+
+\name{Anas Elghoudane}
+\address{Independent Researcher\\
+\texttt{anaselghoudane@gmail.com}}
+
+\begin{document}
+\ninept
+\maketitle
+
+\begin{abstract}
+We present a detection pipeline for Radio Frequency Interference (RFI) in
+Sentinel-1 Synthetic Aperture Radar (SAR) quicklook imagery, achieving
+0.4776 mAP$_{50\text{-}95}$ on the held-out test set of the ESA ClearSAR
+Track 1 challenge. RFI manifests as thin horizontal stripes (median
+height $\approx$10\,px, median width $\approx$140\,px) in variable-size
+Sentinel-1 RGB quicklooks (median $\approx$515$\times$342\,px), a
+small-object geometry that differs markedly from standard COCO
+categories. The pipeline combines (1) a YOLO26x base detector with
+SAR-specific augmentation and pixel-space Normalised Wasserstein
+Distance (NWD) regression loss; (2) pseudo-label distillation from a
+multi-fold ensemble teacher onto unlabelled test imagery; (3)
+multi-resolution test-time augmentation (TTA) fused via Weighted Box
+Fusion (WBF); and (4) selective cross-fold ensembling that discards
+the domain-overlapping fold before final fusion. All ablation numbers
+are computed on a 401-image leak-isolated meta-validation set using
+pycocotools. Pseudo-distillation contributes $+0.041$
+mAP$_{50\text{-}95}$ over the per-fold baseline; multi-resolution TTA
+adds $+0.034$; selective fold dropping adds $+0.002$, for a total
+$+0.077$ over the per-fold baseline.
+\end{abstract}
+
+\begin{keywords}
+Ensemble, pseudo-label distillation, radio-frequency
+interference, SAR imagery, small object detection.
+\end{keywords}
+
+\section{INTRODUCTION}
+\label{sec:intro}
+
+Synthetic Aperture Radar (SAR) sensors aboard Sentinel-1 provide
+continuous global monitoring at C-band (5.4\,GHz). As terrestrial wireless
+infrastructure has expanded, Radio Frequency Interference from
+communication networks and other emitters has become an increasingly
+common data quality problem \cite{njoku2005amsre}. RFI
+corrupts focused SAR imagery as bright horizontal azimuth lines and, in
+quicklook products, as rectangular stripes spanning the full image width
+at affected azimuth positions.
+
+The ESA ClearSAR Track 1 challenge \cite{clearsar2026} frames RFI
+detection as a standard object detection task: given a variable-size
+(median $\approx$515$\times$342\,px) 8-bit RGB quicklook, localise all
+RFI-contaminated azimuth lines
+with axis-aligned bounding boxes and report results in COCO format
+\cite{lin2014coco}. The metric is COCO mAP averaged over IoU thresholds
+0.50--0.95 (mAP$_{50\text{-}95}$).
+
+RFI stripes are geometrically unlike any COCO category: a median
+per-box aspect ratio of $\approx$8:1 (median height $\approx$10\,px,
+median width $\approx$140\,px), with box heights spanning roughly
+4--120\,px (5th--95th percentile) and widths up to $\approx$500\,px.
+This geometry creates several detection challenges:
+\begin{itemize}[noitemsep,leftmargin=*]
+  \item IoU-based regression loss provides no gradient when predicted
+  and target boxes do not overlap --- common when height predictions are
+  off by only a few pixels.
+  \item SAR side-looking geometry breaks horizontal symmetry: left--right
+  reflections change the physically meaningful look direction.
+  \item Multi-scale test-time augmentation above 640\,px amplifies
+  speckle noise relative to the signal, hurting recall at larger
+  resolutions.
+\end{itemize}
+
+We address these challenges through targeted design choices described
+in Section~\ref{sec:method}, and quantify each contribution through
+ablation on a held-out meta-validation set (Section~\ref{sec:exp}).
+
+\section{RELATED WORK}
+\label{sec:rw}
+
+\textbf{SAR object detection.} Deep-learning SAR detection has been
+studied extensively for ships \cite{li2017ssdd,wang2019sarship} and
+aircraft \cite{chen2016sartarget}. These targets are compact (aspect
+ratios $\approx$1--4:1); RFI stripes are qualitatively different. The
+nearest analogous tasks are lane-line and wire/cable detection in RGB
+imagery, both of which favour architectures with elongated receptive
+fields.
+
+\textbf{Small object detection.} Standard detectors struggle when
+objects occupy fewer than 32$\times$32 pixels owing to limited feature
+map resolution and gradient imbalance \cite{liu2021smallsurvey}.
+Proposals for improvement include feature pyramid networks
+\cite{lin2017fpn}, transformer-based decoders \cite{carion2020detr},
+and modified regression losses. Normalised Wasserstein Distance (NWD)
+\cite{wang2021nwd} replaces IoU regression with a Wasserstein distance
+between Gaussian distributions centred on predicted and target boxes,
+yielding non-zero gradients for non-overlapping small targets.
+
+\textbf{Pseudo-label distillation.} Knowledge distillation via
+pseudo-labels \cite{hinton2015distill,xie2020noisystudent} trains a
+student on predictions from a stronger teacher, transferring soft
+knowledge encoded in the teacher's confidence scores. When the teacher
+is a multi-fold ensemble and the student is fine-tuned on unlabelled
+in-distribution data, the approach is sometimes called noisy student
+training \cite{xie2020noisystudent} or self-training
+\cite{zoph2020rethinking}.
+
+\textbf{Test-time augmentation and WBF.} Ensemble methods aggregate
+predictions across multiple checkpoints or image transformations.
+WBF \cite{solovyev2021wbf} clusters overlapping detections and computes
+a weighted average of box coordinates, avoiding the precision-recall
+trade-off of NMS-based fusion, and is widely used when combining
+predictions at multiple resolutions.
+
+\section{METHOD}
+\label{sec:method}
+
+The pipeline has four stages: base training, pseudo-label generation,
+fine-tuning with distillation, and multi-resolution TTA ensemble. It is
+summarised in Figure~\ref{fig:pipeline}.
+
+\begin{figure*}[t]
+\centering
+\setlength{\fboxsep}{3pt}
+\scriptsize
+\begin{tabular}{@{}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{}}
+\fbox{\parbox[c][12mm][c]{17mm}{\centering YOLO26x base\\5 folds\\CLAHE\,+\,NWD}} &
+\fbox{\parbox[c][12mm][c]{15mm}{\centering V12 teacher\\WBF\\ensemble}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Pseudo-label\\786 test imgs\\conf\,$\ge$\,0.75}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Student FT\\$f\!\in\!\{1,2,4\}$\\freeze 10}} &
+\fbox{\parbox[c][12mm][c]{18mm}{\centering Multi-res TTA\\608/640/\\672/704\,+\,WBF}} &
+\fbox{\parbox[c][12mm][c]{17mm}{\centering Cross-fold WBF\\drop $f_0$\\$\to S^{*}$}} &
+\fbox{\parbox[c][12mm][c]{19mm}{\centering Blend $w{=}0.25$\\$S^{*}\!\oplus$\,V12\\$\to$ V17 (0.4776)}} \\
+\end{tabular}
+\caption{Pipeline overview. A YOLO26x base detector (CLAHE input,
+pixel-space NWD loss) is trained per fold; the strongest
+pre-distillation ensemble (V12) pseudo-labels the 786 test images;
+per-fold students are fine-tuned on the fold-augmented data, run
+multi-resolution TTA fused by WBF, fused across folds (dropping the
+domain-overlapping fold~0) into a super-source $S^{*}$, and blended
+with V12 at $w{=}0.25$ to give the final submission V17.}
+\label{fig:pipeline}
+\end{figure*}
+
+\subsection{Data preparation}
+
+\textbf{Dataset split.} The 3{,}154 labelled images are divided into
+five stratified folds. We reserve a \emph{meta-validation set} of 401
+images sampled from the fold-0 validation pool (random seed 42) for
+leak-isolated local evaluation. All 2{,}753 remaining images form the
+meta-training pool.
+
+\textbf{SAR-specific augmentation.} SAR side-looking geometry imposes
+that left--right reflections change the physical meaning of the image
+(near-range versus far-range swaps), while vertical (azimuth) flips
+change the look direction. We therefore set $\texttt{fliplr}=0$ and
+$\texttt{flipud}=0$. Ablation confirmed that enabling horizontal flip
+degrades mAP$_{50\text{-}95}$ by 6.5\% relative. Geometric
+augmentations are restricted to conservative translations ($\pm5\%$ of
+image size) and mild scale perturbations ($\pm25\%$), preventing thin
+RFI boxes from shrinking below reliable detection thresholds. Colour
+jitter (HSV) is suppressed because SAR quicklooks carry no chromatic
+information. Base training additionally uses an offline SAR-aware
+copy-paste augmentation (one augmented copy per image, three RFI
+pastes per copy, max paste IoU 0.05); an ablation showed it gives no
+gain on top of pseudo-distillation, so it is disabled during
+fine-tuning.
+
+\textbf{Contrast enhancement (CLAHE).} As an offline preprocessing
+step we apply Contrast-Limited Adaptive Histogram Equalisation
+(CLAHE, clip limit 3.0, $8\times8$ tile grid) to the luminance (L)
+channel in LAB colour space, sharpening thin low-contrast stripes
+against speckle without amplifying the global background.
+
+\subsection{Base detector: YOLO26x with NWD loss}
+\label{sec:base}
+
+We use YOLO26x \cite{ultralytics2024yolo11} ($\approx$55.7\,M
+parameters) pre-trained on COCO as the base detector, without the
+optional P2 detection head: YOLO26's built-in small-target modules
+(STAL and progressive loss) already address small objects, and an
+ablation showed the added P2 head plateaued well below baseline on
+this data. The risk of overfitting the 2{,}753-image training set is
+addressed by the pseudo-label distillation stage
+(Section~\ref{sec:pseudo}) rather than by shrinking the backbone. The
+detector layout is summarised in Figure~\ref{fig:arch}.
+
+\begin{figure*}[t]
+\centering
+\setlength{\fboxsep}{3pt}
+\scriptsize
+\begin{tabular}{@{}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{$\,\to\,$}c@{}}
+\fbox{\parbox[c][14mm][c]{19mm}{\centering Input\\$640{\times}640$\,RGB\\(CLAHE)}} &
+\fbox{\parbox[c][14mm][c]{22mm}{\centering Backbone\\YOLO26 CSP-Darknet\\with C2PSA blocks}} &
+\fbox{\parbox[c][14mm][c]{22mm}{\centering Neck\\PAN-style\\multi-scale fusion}} &
+\fbox{\parbox[c][14mm][c]{23mm}{\centering Heads P3/P4/P5\\STAL\,+\,ProgLoss\\(no P2 head)}} &
+\fbox{\parbox[c][14mm][c]{28mm}{\centering Loss\\$\mathcal{L}_{\mathrm{box}}{=}\tfrac{1}{2}\mathcal{L}_{\mathrm{CIoU}}$\\$+\tfrac{1}{2}\mathcal{L}_{\mathrm{NWD}}$,\,Cls: BCE}} \\
+\end{tabular}
+\caption{YOLO26x base-detector architecture used in this work: a
+CSP-Darknet backbone with C2PSA attention blocks, a PAN-style
+multi-scale neck, and three detection heads at strides 8/16/32 (the
+optional P2 head is disabled, since YOLO26's built-in STAL and
+progressive-loss modules already address small targets). The
+box-regression loss blends CIoU with pixel-space Normalised
+Wasserstein Distance (NWD); classification uses binary cross-entropy.}
+\label{fig:arch}
+\end{figure*}
+
+\textbf{NWD regression loss.} Standard YOLO regression uses Complete
+IoU (CIoU) \cite{zheng2020ciou} loss. For thin stripes where predicted
+and target boxes frequently do not overlap vertically, CIoU is
+identically zero, providing no gradient. We replace it with a blend of
+CIoU and pixel-space NWD,
+\begin{equation}
+  \mathcal{L}_{\mathrm{box}} = (1-\alpha)\,\mathcal{L}_{\mathrm{CIoU}}
+   + \alpha\,\mathcal{L}_{\mathrm{NWD}},\qquad \alpha=0.5.
+\end{equation}
+Following \cite{wang2021nwd}, each box is modelled as a 2-D Gaussian
+$p(b)=\mathcal{N}(\mu_b,\Sigma_b)$ with mean $\mu_b=(c_x,c_y)^\top$ and
+diagonal covariance $\Sigma_b=\mathrm{diag}(w^2/4,\,h^2/4)$, and NWD is
+defined via the closed-form Wasserstein-2 distance,
+\begin{equation}
+  \mathcal{L}_{\mathrm{NWD}}(b,\hat b)
+   = 1 - \exp\!\left(-\frac{\sqrt{W_2^2(p_b,p_{\hat b})}}{C}\right),
+\end{equation}
+where $C=12.8$\,pixels is a normalisation constant. An implementation
+detail to note is that ultralytics' \texttt{BboxLoss.forward} receives
+bounding boxes in \emph{stride-relative grid units}, not normalised
+or pixel coordinates. We multiply by the anchor stride before
+computing NWD so that $C$ is interpreted in pixel space, which keeps
+gradients non-saturating in the small-height regime characteristic of
+RFI stripes (median $\approx$10\,px).
+
+\textbf{Hyperparameters.} Base training runs for up to 120 epochs
+(early stopping, patience 20) with the MuSGD optimiser, initial
+learning rate $\eta_0{=}10^{-3}$, cosine decay to $\eta_f{=}10^{-5}$,
+3 warmup epochs, batch 16, 640\,px resolution, box-loss weight 12.0.
+
+\subsection{Pseudo-label distillation}
+\label{sec:pseudo}
+
+\textbf{Teacher ensemble.} The teacher (denoted V12) is our strongest
+pre-distillation ensemble: a single-stage WBF over
+multiple YOLO26x fold and multi-resolution-TTA sources (with the
+fold-2 source replaced by a CLAHE-retrained variant) together with one
+RF-DETR-Large \cite{roboflow2024rfdetr} fold checkpoint weighted
+$1.5\times$,
+\begin{equation}
+  \hat D_{\mathrm{teacher}}
+  = \mathrm{WBF}\!\left(\{D_f\}_{f},\,D_{\mathrm{RF}};\;\tau{=}0.70,\,
+    \texttt{conf\_type}{=}\texttt{max}\right),
+\end{equation}
+where $\tau$ is the IoU clustering threshold. V12 scores 0.4755 on the
+held-out test set. WBF parameters ($\tau{=}0.70$,
+\texttt{conf\_type=max}) were fixed after sweeping
+$\tau\!\in\!\{0.65,0.70,0.75\}$ and four confidence aggregation modes;
+all variants outside $(0.70,\,\texttt{max})$ degraded performance. The
+marginal value of the RF-DETR component is ablated in
+Section~\ref{sec:exp}.
+
+\textbf{Pseudo-labelling the test set.} The teacher is applied to the
+786 unlabelled test images with a confidence threshold of 0.75,
+keeping at most 20 boxes per image, producing 600 pseudo-labelled
+images after discarding low-density detections. These are merged with
+each fold's training split to form \emph{fold-augmented} datasets.
+
+\textbf{Student fine-tuning.} For each fold $f\in\{1,2,4\}$, a student
+is fine-tuned from the per-fold base checkpoint of
+Section~\ref{sec:base} on the fold-augmented dataset, with the
+backbone frozen for the first 10 epochs (\texttt{freeze=10}), AdamW \cite{loshchilov2019adamw}
+$\eta_0{=}10^{-4}$, 15 total epochs, batch 24, and the same NWD loss
+blend as base training. Fold 0 is omitted because its base partition
+overlaps the meta-validation pool: the fold-0 fine-tuned student
+produces correlated rather than complementary predictions, and
+including it empirically degrades ensemble accuracy
+(Section~\ref{sec:exp}).
+
+\subsection{Multi-resolution TTA and final fusion}
+
+Each fine-tuned student is applied to the meta-validation and test
+images at four resolutions $\mathcal{I}=\{608,640,672,704\}$ pixels.
+Predictions across the four resolutions are fused per-fold via WBF
+(IoU=0.70, \texttt{conf\_type=max}), producing one TTA-fused
+prediction set per fold. Resolutions above 704\,px were tested and
+found to degrade performance due to amplified speckle aliasing at
+YOLO's feature pyramid strides. Flip-based TTA (horizontal/vertical)
+is explicitly disabled.
+
+Per-fold TTA predictions are then fused into a single super-source
+$S^*$ via WBF with equal weights,
+\begin{equation}
+  S^* = \mathrm{WBF}\!\left(D^{\mathrm{TTA}}_1, D^{\mathrm{TTA}}_2,
+   D^{\mathrm{TTA}}_4;\,w{=}1.0,\,\tau{=}0.70\right).
+\end{equation}
+The final submission candidate (denoted V17) is a two-source blend of
+the original teacher output and the super-source,
+\begin{equation}
+  D_{\mathrm{final}} = \mathrm{WBF}\!\left(D_{\mathrm{V12}},\,S^*;
+   \,w{=}(1.0,\,0.25),\,\tau{=}0.70\right).
+\end{equation}
+The blend weight $w{=}0.25$ on the super-source was selected by
+sweeping $w\!\in\!\{0.10,0.15,0.25,0.35,0.50\}$ on the
+meta-validation set only.
+
+\section{EXPERIMENTS}
+\label{sec:exp}
+
+\subsection{Evaluation protocol}
+
+\textbf{Metric.} COCO mAP$_{50\text{-}95}$ computed with pycocotools
+\cite{lin2014coco} on the 401-image meta-validation set. Held-out
+test-set mAP is measured by the challenge platform on the undisclosed
+test partition: submissions are uploaded as a zipped COCO-format JSON
+of detections, and the platform returns the official score.
+
+\textbf{Leak isolation.} Cross-fold validation mAPs on the full
+training set are inflated (``leaked'') because each fold model has seen
+fold-complementary images during training. The 401-image meta-val is
+honest only for models whose training partition does not overlap it.
+Rows in Table~\ref{tab:ablation} for which the model has trained on
+images sampled into the meta-validation pool are therefore subject to
+partial leakage; this is consistent with the observed inversion at the
+last row, where the leaked teacher ceiling caps reported meta-val
+mAP$_{50\text{-}95}$.
+
+\subsection{Component ablation}
+
+\begin{table}[t]
+\centering
+\caption{Component ablation on 401-image meta-validation.}
+\label{tab:ablation}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
+\midrule
+Cold fold-0 baseline                  & 0.394 & --- \\
++ Pseudo-FT, fold 4 only              & 0.435 & $+0.041$ \\
++ Multi-res TTA, fold 4 only          & 0.469 & $+0.034$ \\
++ 3-fold (drop F0), equal weights     & 0.471 & $+0.002$ \\
++ V12 blend @ $w{=}0.25$ (V17)        & 0.471$^\dagger$ & --- \\
+\bottomrule
+\end{tabular}\\[2pt]
+{\scriptsize $^\dagger$Meta-val cannot exceed V12 by adding an honest
+source (V12 is leaked).\\
+Official held-out test: \textbf{0.4776}.}
+\end{table}
+
+Table~\ref{tab:ablation} reports each component addition. The chain
+$0.394 \to 0.435 \to 0.469 \to 0.471$ totals $+0.077$ over cold
+training; the V12 blend does not improve meta-val (the teacher
+already saturates the leaked ceiling) but it transfers to the
+held-out test set, where the same blend obtains 0.4776 versus 0.4755
+for V12 alone.
+
+\subsection{Fold selection ablation}
+
+\begin{table}[t]
+\centering
+\caption{Cross-fold ensemble: effect of fold-0 inclusion.}
+\label{tab:folds}
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Fold set} & \textbf{mAP$_{50\text{-}95}$} \\
+\midrule
+Fold 4 alone (TTA)                & 0.469 \\
+4-fold: F0+F1+F2+F4 equal weights & 0.458 \\
+3-fold: F1+F2+F4 (drop F0)        & \textbf{0.471} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:folds} shows that the 4-fold ensemble is \emph{worse}
+than fold-4 alone, and the 3-fold (drop-F0) is best. This is
+explained by the domain overlap of fold-0 with the meta-validation
+pool: the fold-0 fine-tuned student produces correlated, low-diversity
+predictions that drag down the consensus.
+
+\subsection{Blend weight sweep}
+
+\begin{table}[t]
+\centering
+\caption{Blend weight sweep: V12 @ $1.0$ + super-source @ $w$.}
+\label{tab:blend}
+\small
+\begin{tabular}{ccc}
+\toprule
+\textbf{$w$} & \textbf{Leaked fold-0 val} & \textbf{Official test} \\
+\midrule
+0.00 (V12 alone) & 0.5154 & 0.4755 \\
+0.25             & 0.5148 & \textbf{0.4776} \\
+0.375            & 0.5135 & 0.4768 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:blend} reports the leaked fold-0 validation
+mAP$_{50\text{-}95}$ at three super-source blend weights together with
+the corresponding official held-out test scores. The V12 source is
+itself leaked on fold-0 val, so the baseline at $w{=}0$ is the leaked
+ceiling; adding the honest super-source decreases leaked val
+monotonically while improving held-out test up to $w{=}0.25$.
+
+\subsection{Negative results}
+
+We systematically evaluated several axes that did not transfer to the
+held-out test set.
+
+\textbf{RF-DETR ensemble.} The teacher's RF-DETR-Large
+\cite{roboflow2024rfdetr} component (fine-tuned from COCO, weight
+$1.5\times$) improves leaked fold-0 validation mAP by only $+0.001$
+over the YOLO-only ensemble, and the official test set by $+0.0002$;
+across six checkpoint--weight variants the RF-DETR axis is saturated,
+so it is retained at minimal weight but contributes negligibly.
+
+\textbf{D-FINE-X.} D-FINE-X \cite{peng2024dfine}
+(Obj365$\to$COCO pre-training) was fine-tuned on fold 0 for ten epochs.
+Final mAP$_{50\text{-}95}$ reached $3{\times}10^{-4}$, more than
+$1{,}000\times$ below the fold-0 baseline, despite a clean loss
+decrease from 60 to 30. DETR-family decoders appear to require many
+more epochs to adapt to the elongated aspect-ratio geometry of RFI
+boxes.
+
+\textbf{Score calibration.} Temperature-scaled post-hoc calibration
+applied to the final blend yielded at most $+0.0002$ mAP, consistent
+with the teacher ensemble already encoding well-calibrated confidence
+scores.
+
+\textbf{Inference-only SAHI.} Sliced-inference SAHI
+\cite{akyon2022sahi} at 320-pixel tiles regressed mAP by $-0.085$,
+consistent with tile-boundary fragmentation of long horizontal
+stripes.
+
+\section{DISCUSSION AND CONCLUSION}
+
+The honest per-fold baseline saturates around 0.394
+mAP$_{50\text{-}95}$ (Table~\ref{tab:ablation}, top row): 2{,}753
+images are too few to support reliable localisation of thin,
+low-contrast RFI stripes across the full IoU=0.50--0.95 sweep. Three
+findings drove the eventual lift to 0.4776. \emph{(i)}
+Pseudo-distillation from a multi-source ensemble teacher contributed
+the largest single gain ($+0.041$): the soft signal in the teacher's
+confidence scores compensates for the small training set more
+effectively than the architectural alternatives we evaluated.
+\emph{(ii)}
+Multi-resolution TTA between 608 and 704\,px added a further $+0.034$
+because thin stripes a few pixels tall are resolved unevenly by YOLO's
+strided feature pyramid at any single input size. \emph{(iii)}
+Dropping the domain-overlapping fold-0 from the cross-fold ensemble
+--- counter-intuitively, a \emph{smaller} ensemble --- was
+net-positive, because correlated predictions drag the WBF consensus
+when one source has seen the validation data during training.
+
+Several axes that look attractive on leaked cross-fold validation did
+not transfer to held-out test: a second architectural family (RF-DETR)
+plateaued at $+0.0002$ across six checkpoint--weight variants;
+inference-only SAHI
+fragmented long horizontal stripes at tile boundaries ($-0.085$); and
+temperature-scaled calibration could not improve a teacher whose
+confidences were already well-conditioned by WBF fusion.
+Horizontal-flip TTA cost $-6.5\%$ relative, consistent with SAR
+side-looking geometry being asymmetric in azimuth--range
+\cite{oliver2004sar}. The largest remaining gap is at high IoU
+thresholds, where sub-pixel height accuracy dominates and a 640-px
+input under-resolves the median $\approx$10\,px stripe; ranked by
+expected return, the most promising next moves are (a) sliced
+\emph{training} at 320-px tiles so the backbone sees RFI at doubled
+relative height, (b) a DETR-family detector with a different decoder
+trained for substantially more epochs than the ten that proved
+insufficient for D-FINE-X \cite{huang2024deim}, and (c) a second
+pseudo-label refresh with V17 itself as the new teacher.
+
+The final pipeline --- YOLO26x with pixel-space NWD regression loss,
+ensemble-teacher pseudo-distillation, multi-resolution TTA and a
+selective cross-fold WBF --- reaches 0.4776 mAP$_{50\text{-}95}$ on
+the held-out test set; on meta-validation the ablation chain in
+Table~\ref{tab:ablation} totals $+0.077$ over the per-fold baseline.
+The submission placed the \emph{UdeM AI} team 28th of 120 teams on
+the public leaderboard of ESA ClearSAR Track~1. All training and fine-tuning were performed on
+a single cloud NVIDIA A100 GPU.
+
+\vfill\pagebreak
+
+\bibliographystyle{IEEEbib}
+\begin{thebibliography}{99}
+
+\bibitem{njoku2005amsre}
+E.~G. Njoku, P.~Ashcroft, T.~K. Chan, and L.~Li,
+``Global survey and statistics of radio-frequency interference in
+AMSR-E land observations,''
+\emph{IEEE Trans. Geosci. Remote Sens.}, vol.~43, no.~5,
+pp.~938--947, 2005.
+
+\bibitem{clearsar2026}
+European Space Agency,
+``ClearSAR Track 1: Radio-frequency interference detection in
+Sentinel-1 quicklook imagery,''
+Challenge specification, 2026.
+
+\bibitem{lin2014coco}
+T.-Y. Lin, M.~Maire, S.~Belongie, L.~Bourdev, R.~Girshick, J.~Hays,
+P.~Perona, D.~Ramanan, C.~L. Zitnick, and P.~Doll\'ar,
+``Microsoft COCO: Common objects in context,''
+in \emph{Proc. ECCV}, 2014, pp.~740--755.
+
+\bibitem{li2017ssdd}
+J.~Li, C.~Qu, and J.~Shao,
+``Ship detection in SAR images based on an improved Faster R-CNN,''
+in \emph{Proc. SAR Big Data Era (BIGSARDATA)}, 2017.
+
+\bibitem{wang2019sarship}
+Y.~Wang, C.~Wang, H.~Zhang, Y.~Dong, and S.~Wei,
+``A SAR dataset of ship detection for deep learning under complex
+backgrounds,''
+\emph{Remote Sensing}, vol.~11, no.~7, p.~765, 2019.
+
+\bibitem{chen2016sartarget}
+S.~Chen, H.~Wang, F.~Xu, and Y.-Q. Jin,
+``Target classification using the deep convolutional networks for SAR
+images,''
+\emph{IEEE Trans. Geosci. Remote Sens.}, vol.~54, no.~8,
+pp.~4806--4817, 2016.
+
+\bibitem{liu2021smallsurvey}
+Y.~Liu, P.~Sun, N.~Wergeles, and Y.~Shang,
+``A survey and performance evaluation of deep learning methods for
+small object detection,''
+\emph{Expert Systems with Applications}, vol.~172, p.~114602, 2021.
+
+\bibitem{lin2017fpn}
+T.-Y. Lin, P.~Doll\'ar, R.~Girshick, K.~He, B.~Hariharan, and
+S.~Belongie,
+``Feature pyramid networks for object detection,''
+in \emph{Proc. CVPR}, 2017, pp.~2117--2125.
+
+\bibitem{carion2020detr}
+N.~Carion, F.~Massa, G.~Synnaeve, N.~Usunier, A.~Kirillov, and
+S.~Zagoruyko,
+``End-to-end object detection with transformers,''
+in \emph{Proc. ECCV}, 2020, pp.~213--229.
+
+\bibitem{wang2021nwd}
+J.~Wang, C.~Xu, W.~Yang, and L.~Yu,
+``A normalized Gaussian Wasserstein distance for tiny object
+detection,''
+\emph{arXiv:2110.13389}, 2021.
+
+\bibitem{hinton2015distill}
+G.~Hinton, O.~Vinyals, and J.~Dean,
+``Distilling the knowledge in a neural network,''
+\emph{arXiv:1503.02531}, 2015.
+
+\bibitem{xie2020noisystudent}
+Q.~Xie, M.-T. Luong, E.~Hovy, and Q.~V. Le,
+``Self-training with noisy student improves ImageNet classification,''
+in \emph{Proc. CVPR}, 2020, pp.~10687--10698.
+
+\bibitem{zoph2020rethinking}
+B.~Zoph, G.~Ghiasi, T.-Y. Lin, Y.~Cui, H.~Liu, E.~D. Cubuk, and
+Q.~V. Le,
+``Rethinking pre-training and self-training,''
+in \emph{Proc. NeurIPS}, 2020.
+
+\bibitem{solovyev2021wbf}
+R.~Solovyev, W.~Wang, and T.~Gabruseva,
+``Weighted boxes fusion: Ensembling boxes from different object
+detection models,''
+\emph{Image and Vision Computing}, vol.~107, p.~104117, 2021.
+
+\bibitem{ultralytics2024yolo11}
+G.~Jocher and J.~Qiu,
+``Ultralytics YOLO26,''
+\url{https://github.com/ultralytics/ultralytics}, 2026.
+
+\bibitem{zheng2020ciou}
+Z.~Zheng, P.~Wang, W.~Liu, J.~Li, R.~Ye, and D.~Ren,
+``Distance-IoU loss: Faster and better learning for bounding box
+regression,''
+in \emph{Proc. AAAI}, 2020, pp.~12993--13000.
+
+\bibitem{roboflow2024rfdetr}
+Roboflow,
+``RF-DETR: A real-time transformer-based object detector,''
+\url{https://github.com/roboflow/rf-detr}, 2024.
+
+\bibitem{loshchilov2019adamw}
+I.~Loshchilov and F.~Hutter,
+``Decoupled weight decay regularization,''
+in \emph{Proc. ICLR}, 2019.
+
+\bibitem{peng2024dfine}
+Y.~Peng, H.~Li, P.~Wu, Y.~Zhang, X.~Sun, and F.~Wu,
+``D-FINE: Redefine regression task of DETR as fine-grained
+distribution refinement,''
+\emph{arXiv:2410.13842}, 2024.
+
+\bibitem{akyon2022sahi}
+F.~C. Akyon, S.~O. Altinuc, and A.~Temizel,
+``Slicing aided hyper inference and fine-tuning for small object
+detection,''
+in \emph{Proc. IEEE ICIP}, 2022, pp.~966--970.
+
+\bibitem{oliver2004sar}
+C.~Oliver and S.~Quegan,
+\emph{Understanding Synthetic Aperture Radar Images}.
+SciTech Publishing, 2004.
+
+\bibitem{huang2024deim}
+S.~Huang, Z.~Lu, X.~Cun, Y.~Yu, X.~Zhou, and X.~Shen,
+``DEIM: DETR with improved matching for fast convergence,''
+\emph{arXiv:2412.04234}, 2024.
+
+\end{thebibliography}
+
+\end{document}

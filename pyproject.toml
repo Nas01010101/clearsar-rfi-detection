@@ -1,0 +1,32 @@
+[project]
+name = "clearsat-t1"
+version = "2.0.0"
+description = "ESA ClearSAR Track 1 — RFI detection on Sentinel-1 quicklooks (v2 clean rebuild)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+
+dependencies = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "ultralytics>=8.3",
+    "pycocotools>=2.0.7",
+    "ensemble-boxes>=1.0.9",
+    "sahi>=0.11",
+    "opencv-python-headless>=4.10",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "tqdm>=4.66",
+    "mlflow>=2.16",
+    "wandb>=0.17",
+    "scikit-learn>=1.4",
+    "scikit-image>=0.24",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "ipython"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
