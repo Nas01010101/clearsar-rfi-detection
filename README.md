@@ -21,7 +21,7 @@ A single-GPU pipeline for detecting RFI stripes in Sentinel-1 quicklooks. It com
 | **Compute** | one cloud NVIDIA A100, 15 fine-tuning epochs/fold |
 | **Gain over per-fold baseline** | **+0.077** mAP (meta-validation ablation) |
 
-> This is an honest, reproducible writeup of a one-person entry — not a winning solution. The value here is the methodology: leak-isolated evaluation, a working distillation + TTA + selective-WBF recipe, and a thorough log of what *didn't* transfer (see [Negative results](#negative-results)).
+> A reproducible writeup of a single-person entry, focused on methodology: leak-isolated evaluation, a distillation + TTA + selective-WBF recipe, and a log of what *didn't* transfer (see [Negative results](#negative-results)).
 
 ---
 
@@ -85,11 +85,11 @@ Documented because they cost real compute and may save someone else theirs:
 | Temperature-scaled calibration | ≤ +0.0002 — teacher already calibrated |
 | Horizontal-flip TTA | −6.5 % — SAR geometry is asymmetric |
 
-## Limitations (honest notes)
+## Limitations
 
 - **Not end-to-end reproducible.** The dataset (ESA EOTDL, license-restricted), the trained weights, and the V12 teacher checkpoint are **not** included — so this repo does not regenerate 0.4776 out of the box. It is the method, code, and writeup, not a one-command reproduction.
-- **Competition-grade code, not a library.** The scripts are argparse CLIs with no test suite or package structure — fit for a challenge entry, not a production / software-engineering portfolio piece.
-- **Mid-pack result, stated plainly.** 28th of 172 entrants (≈120 teams appeared on the public leaderboard); below the top entries (#1 ≈ 0.5057). The value here is the methodology and the documented negative results, not the leaderboard position.
+- **Competition-grade code, not a library.** The scripts are argparse CLIs with no test suite or package structure.
+- **Mid-pack leaderboard result.** 28th of 172 entrants (≈120 teams appeared on the public leaderboard); below the top entries (#1 ≈ 0.5057).
 
 ## Repository structure
 
