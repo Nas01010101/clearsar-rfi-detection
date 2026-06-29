@@ -30,12 +30,16 @@ Distance (NWD) regression loss; (2) pseudo-label distillation from a
 multi-fold ensemble teacher onto unlabelled test imagery; (3)
 multi-resolution test-time augmentation (TTA) fused via Weighted Box
 Fusion (WBF); and (4) selective cross-fold ensembling that discards
-the domain-overlapping fold before final fusion. All ablation numbers
-are computed on a 401-image leak-isolated meta-validation set using
-pycocotools. Pseudo-distillation contributes $+0.041$
-mAP$_{50\text{-}95}$ over the per-fold baseline; multi-resolution TTA
-adds $+0.034$; selective fold dropping adds $+0.002$, for a total
-$+0.077$ over the per-fold baseline.
+the domain-overlapping fold before final fusion. On a 401-image
+leak-isolated meta-validation set, the honest student source built by
+this pipeline gains $+0.077$ mAP$_{50\text{-}95}$ over a cold per-fold
+baseline (pseudo-distillation $+0.040$, multi-resolution TTA $+0.036$,
+fold dropping $+0.002$). On the genuinely unseen test set, however,
+this source is largely redundant with the ensemble teacher: the full
+distillation--TTA--blend stack adds only $+0.0021$ over submitting the
+teacher alone, and $+0.0056$ over a plain 5-fold ensemble. We report
+both measurements explicitly, as the gap between them is the paper's
+central, and cautionary, finding.
 \end{abstract}
 
 \begin{keywords}
@@ -318,24 +322,92 @@ meta-validation set only.
 \textbf{Metric.} COCO mAP$_{50\text{-}95}$ computed with pycocotools
 \cite{lin2014coco} on the 401-image meta-validation set. Held-out
 test-set mAP is measured by the challenge platform on the undisclosed
-test partition: submissions are uploaded as a zipped COCO-format JSON
-of detections, and the platform returns the official score.
+786-image test partition: submissions are uploaded as a COCO-format
+JSON of detections, and the platform returns the official score
+(rate-limited to one submission per 12\,h).
 
-\textbf{Leak isolation.} Cross-fold validation mAPs on the full
-training set are inflated (``leaked'') because each fold model has seen
-fold-complementary images during training. The 401-image meta-val is
-honest only for models whose training partition does not overlap it.
-Rows in Table~\ref{tab:ablation} for which the model has trained on
-images sampled into the meta-validation pool are therefore subject to
-partial leakage; this is consistent with the observed inversion at the
-last row, where the leaked teacher ceiling caps reported meta-val
-mAP$_{50\text{-}95}$.
+\textbf{Role of cross-validation.} We stress that the five-fold split
+serves an \emph{ensemble-construction} role, not the conventional role
+of an out-of-fold generalisation estimator. Each fold detector becomes
+a member of the WBF teacher ensemble (Section~\ref{sec:pseudo}); the
+folds exist to give the ensemble diverse members, and the per-fold
+\emph{validation} mAPs are never used to estimate test performance or
+to select the final model. This is deliberate: cross-fold validation
+mAPs on the full training set are inflated (``leaked''), because every
+fold detector has, through the other four folds, seen the images held
+out by any single fold. Honest generalisation is therefore measured by
+two separate instruments: (i)~the 401-image leak-isolated
+meta-validation set (Table~\ref{tab:ablation}), used only as a
+single-model gate, and (ii)~the official held-out test set
+(Table~\ref{tab:heldout}), used for all model-selection and final
+reporting.
 
-\subsection{Component ablation}
+\textbf{Leak isolation.} The 401-image meta-validation set is sampled
+exclusively from the fold-0 validation pool (seed 42, stratified by box
+count, small-object count and aspect ratio; all new models train on the
+remaining 2{,}753 images). It is honest only for models whose training
+partition does not overlap it: the cold fold-0 detector and the
+pseudo-FT students (trained on the meta-training pool) are clean,
+whereas the full teacher ensemble V12---which includes folds 1--4, each
+trained on all of fold~0---remains \emph{leaked} on meta-validation.
+This is why meta-validation cannot be used to judge V12 or any blend
+that contains it (Section~\ref{sec:heldout}), and why the held-out test
+set is the only honest instrument for the full pipeline.
+
+\subsection{What transfers to genuinely unseen data}
+\label{sec:heldout}
+
+The decisive question---raised directly in review---is how much each
+stage contributes on data no part of the pipeline has seen, rather than
+on meta-validation. We answer it on the official held-out test set
+(Table~\ref{tab:heldout}), separating two things the meta-validation
+chain conflates: the strength of the honest student source in
+\emph{isolation}, and its \emph{marginal} value once added to an
+already-strong teacher.
 
 \begin{table}[t]
 \centering
-\caption{Component ablation on 401-image meta-validation.}
+\caption{Contribution on the official held-out test set (the only
+leak-free instrument for the full pipeline). All three rows were scored
+by the challenge platform on the undisclosed 786-image partition.}
+\label{tab:heldout}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
+\midrule
+Plain 5-fold WBF ensemble             & 0.4720 & --- \\
+Teacher V12 (\,$+$RF-DETR,\,CLAHE swap) & 0.4755 & $+0.0035$ \\
+Full pipeline V17 (\,$+$distill\,$+$TTA\,$+$drop-$f_0$\,$+$blend) & \textbf{0.4776} & $+0.0021$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The honest reading is sobering and we state it plainly: on unseen data,
+the entire distillation, multi-resolution TTA, selective fold-dropping
+and blending stack adds only $+0.0021$ mAP$_{50\text{-}95}$ over simply
+submitting the teacher ensemble, and $+0.0056$ over a plain
+quality-weighted 5-fold WBF. The pipeline does not \emph{extend}
+either: raising the blend weight to $w{=}0.375$ regressed to 0.4768
+($-0.0008$), and a more aggressive second-generation pseudo-FT blend
+regressed to 0.4566 ($-0.019$, below the teacher). The marginal value
+of the learned super-source over the teacher is real but small, and
+positive only at a conservative blend weight.
+
+\subsection{Decomposing the student source (meta-validation)}
+
+Where, then, do the large meta-validation gains come from? They measure
+the construction of the honest student source in isolation, on the
+leak-isolated 401-image set (Table~\ref{tab:ablation}); every row here
+is clean (the students train on the meta-training pool only). The chain
+is reproducible from the archived per-fold/per-resolution predictions
+(\texttt{scripts/verify\_ablation.py}).
+
+\begin{table}[t]
+\centering
+\caption{Construction of the honest student super-source $S^{*}$, on the
+401-image leak-isolated meta-validation set. These are single-source
+numbers; they do \emph{not} include the (leaked) teacher.}
 \label{tab:ablation}
 \small
 \begin{tabular}{lcc}
@@ -343,23 +415,26 @@ mAP$_{50\text{-}95}$.
 \textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
 \midrule
 Cold fold-0 baseline                  & 0.394 & --- \\
-+ Pseudo-FT, fold 4 only              & 0.435 & $+0.041$ \\
-+ Multi-res TTA, fold 4 only          & 0.469 & $+0.034$ \\
-+ 3-fold (drop F0), equal weights     & 0.471 & $+0.002$ \\
-+ V12 blend @ $w{=}0.25$ (V17)        & 0.471$^\dagger$ & --- \\
+Pseudo-FT student, fold 4             & 0.434 & $+0.040$ \\
++ Multi-res TTA (4 res, WBF)          & 0.469 & $+0.036$ \\
++ 3-fold WBF (drop $f_0$) $=S^{*}$    & 0.471 & $+0.002$ \\
 \bottomrule
-\end{tabular}\\[2pt]
-{\scriptsize $^\dagger$Meta-val cannot exceed V12 by adding an honest
-source (V12 is leaked).\\
-Official held-out test: \textbf{0.4776}.}
+\end{tabular}
 \end{table}
 
-Table~\ref{tab:ablation} reports each component addition. The chain
-$0.394 \to 0.435 \to 0.469 \to 0.471$ totals $+0.077$ over cold
-training; the V12 blend does not improve meta-val (the teacher
-already saturates the leaked ceiling) but it transfers to the
-held-out test set, where the same blend obtains 0.4776 versus 0.4755
-for V12 alone.
+The chain $0.394 \to 0.434 \to 0.469 \to 0.471$ totals $+0.077$, and
+pseudo-distillation is the single largest honest lever. The apparent
+contradiction with Table~\ref{tab:heldout} is the central lesson: the
+$+0.077$ buys an honest source that is, on unseen test, \emph{largely
+redundant} with the teacher ensemble, which already encodes the same
+multi-fold knowledge. Adding $S^{*}$ to V12 cannot help on
+meta-validation at all---V12 is leaked there, so its 0.515 ceiling is
+unbeatable by an honest source---and helps only marginally
+($+0.0021$) on held-out test. We could not measure the intermediate
+distillation stages directly on held-out test: each official
+submission was rate-limited to one per 12\,h, so only the three
+ensemble end-points in Table~\ref{tab:heldout} were scored on the true
+test partition.
 
 \subsection{Fold selection ablation}
 
@@ -445,20 +520,35 @@ stripes.
 The honest per-fold baseline saturates around 0.394
 mAP$_{50\text{-}95}$ (Table~\ref{tab:ablation}, top row): 2{,}753
 images are too few to support reliable localisation of thin,
-low-contrast RFI stripes across the full IoU=0.50--0.95 sweep. Three
-findings drove the eventual lift to 0.4776. \emph{(i)}
-Pseudo-distillation from a multi-source ensemble teacher contributed
-the largest single gain ($+0.041$): the soft signal in the teacher's
+low-contrast RFI stripes across the full IoU=0.50--0.95 sweep. Building
+the honest student source then recovers $+0.077$ on meta-validation,
+with three contributing steps. \emph{(i)}
+Pseudo-distillation from a multi-source ensemble teacher is the largest
+single honest lever ($+0.040$): the soft signal in the teacher's
 confidence scores compensates for the small training set more
 effectively than the architectural alternatives we evaluated.
 \emph{(ii)}
-Multi-resolution TTA between 608 and 704\,px added a further $+0.034$
+Multi-resolution TTA between 608 and 704\,px adds a further $+0.036$
 because thin stripes a few pixels tall are resolved unevenly by YOLO's
 strided feature pyramid at any single input size. \emph{(iii)}
 Dropping the domain-overlapping fold-0 from the cross-fold ensemble
---- counter-intuitively, a \emph{smaller} ensemble --- was
+--- counter-intuitively, a \emph{smaller} ensemble --- is
 net-positive, because correlated predictions drag the WBF consensus
 when one source has seen the validation data during training.
+
+The harder, and more honest, conclusion concerns
+\emph{transfer}. Almost all of that $+0.077$ is captured independently
+by the teacher ensemble: on the genuinely unseen test set
+(Table~\ref{tab:heldout}), adding the entire student super-source to
+the teacher buys only $+0.0021$, and pushing the same machinery harder
+(higher blend weight, a second pseudo-FT generation) regresses below
+the teacher. For a practitioner facing a fresh, unlabelled SAR
+acquisition, the operationally honest recommendation is therefore that
+a quality-weighted multi-fold ensemble teacher recovers most of the
+attainable accuracy; the distillation--TTA--blend stack is a small,
+fragile top-up, worthwhile only at a conservative blend weight and at
+substantial extra compute. We report this gap rather than the
+flattering meta-validation chain alone, because it is what generalises.
 
 Several axes that look attractive on leaked cross-fold validation did
 not transfer to held-out test: a second architectural family (RF-DETR)

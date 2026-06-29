@@ -61,17 +61,26 @@ Full details, equations and ablations are in the [paper](docs/clearsar_paper.pdf
 
 ## Results
 
-Component ablation on the 401-image leak-isolated meta-validation set (pycocotools):
+Two measurements, deliberately kept separate (this is the paper's central, cautionary point — see the ICIP'26 reviewer responses below).
+
+**(a) Construction of the honest student source** — on the 401-image leak-isolated meta-validation set (pycocotools; reproducible via `scripts/verify_ablation.py`):
 
 | Configuration | mAP@[.50:.95] | Δ |
 |---|---|---|
-| Per-fold baseline (fold 0) | 0.394 | — |
-| + Pseudo-FT (fold 4) | 0.435 | +0.041 |
-| + Multi-resolution TTA | 0.469 | +0.034 |
-| + 3-fold WBF (drop fold-0) | 0.471 | +0.002 |
-| **+ V12 blend → final (V17)** | **0.4776** *(held-out test)* | — |
+| Cold fold-0 baseline | 0.394 | — |
+| Pseudo-FT student (fold 4) | 0.434 | +0.040 |
+| + Multi-resolution TTA (4 res, WBF) | 0.469 | +0.036 |
+| + 3-fold WBF (drop fold-0) = S* | 0.471 | +0.002 |
 
-**What worked:** pseudo-distillation was the single largest lever (+0.041); multi-resolution TTA was reliable (+0.034); dropping the leak-correlated fold-0 *improved* the ensemble despite being a smaller one.
+**(b) What actually transfers to genuinely unseen data** — official held-out test (challenge platform):
+
+| Configuration | mAP@[.50:.95] | Δ |
+|---|---|---|
+| Plain 5-fold WBF ensemble | 0.4720 | — |
+| Teacher V12 (+RF-DETR, CLAHE swap) | 0.4755 | +0.0035 |
+| **Full pipeline V17** (+distill +TTA +drop-f0 +blend) | **0.4776** | +0.0021 |
+
+**The honest reading:** the meta-val chain shows the student source gaining **+0.077** in isolation, but on unseen test that source is *largely redundant with the teacher* — the entire distillation/TTA/blend stack adds only **+0.0021** over simply submitting the teacher (and **+0.0056** over a plain 5-fold ensemble). Pushing harder regresses (w=0.375 → 0.4768; a 2nd-gen pseudo-FT blend → 0.4566, below the teacher). A quality-weighted multi-fold ensemble recovers most of the attainable accuracy on fresh SAR data; the stack is a small, fragile top-up.
 
 ### Negative results
 
@@ -107,6 +116,7 @@ scripts/
   predict_val.py            # validation-set inference
   ensemble_wbf.py           # single-stage Weighted Box Fusion
   eval_coco.py              # pycocotools mAP evaluation
+  verify_ablation.py        # reproduce the meta-val ablation chain from saved preds
 requirements.txt
 ```
 

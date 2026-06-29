@@ -25,15 +25,16 @@ detector with pixel-space Normalised Wasserstein Distance (NWD)
 regression, pseudo-label distillation from a multi-source ensemble
 teacher onto unlabelled test imagery, multi-resolution test-time
 augmentation (TTA) fused by Weighted Box Fusion (WBF), and a selective
-cross-fold ensemble that drops the domain-overlapping fold. Ablation
-on a 401-image leak-isolated meta-validation set shows
-pseudo-distillation contributes $+0.041$ mAP$_{50\text{-}95}$ over the
-per-fold baseline, multi-resolution TTA adds $+0.034$, and selective
-fold dropping adds $+0.002$, for a total $+0.077$ over the per-fold
-meta-validation baseline. The final submission reaches 0.4776
-mAP$_{50\text{-}95}$ on the held-out test set, placing 28th of 172
-teams. All training and fine-tuning used a single cloud NVIDIA A100
-GPU.
+cross-fold ensemble that drops the domain-overlapping fold. On a
+401-image leak-isolated meta-validation set the honest student source
+built by this pipeline gains $+0.077$ mAP$_{50\text{-}95}$ over a cold
+per-fold baseline (distillation $+0.040$, TTA $+0.036$, fold dropping
+$+0.002$). The final submission reaches 0.4776 mAP$_{50\text{-}95}$ on
+the held-out test set, placing 28th of 172 teams. We also report the
+cautionary half of the story: on the genuinely unseen test set this
+student source is largely redundant with the ensemble teacher, so the
+full distillation--TTA--blend stack adds only $+0.0021$ over submitting
+the teacher alone. All training used a single cloud NVIDIA A100 GPU.
 \end{abstract}
 
 \begin{keywords}
@@ -56,10 +57,15 @@ per-box aspect ratio of $\approx$8:1. Three constraints follow:
 IoU-based regression gives no gradient for non-overlapping thin boxes;
 SAR side-looking geometry breaks horizontal symmetry, so flip TTA is
 disabled (H-flip costs $-6.5\%$ \cite{oliver2004sar}); and inference
-resolutions above 640\,px amplify speckle relative to signal. We
-reserve a leak-isolated meta-validation set of 401 images sampled
-from the fold-0 validation pool (seed 42) for honest local
-evaluation.
+resolutions above 640\,px amplify speckle relative to signal. The
+five-fold split is used to \emph{construct} diverse ensemble members,
+not as an out-of-fold generalisation estimator: cross-fold validation
+mAPs are leaked (each fold detector has seen the other folds' held-out
+images) and are never used for model selection. Honest generalisation
+is judged by two separate instruments---a 401-image leak-isolated
+meta-validation set sampled from the fold-0 validation pool (seed 42),
+used only as a single-model gate, and the official held-out test set,
+used for all model selection and final reporting.
 
 \section{METHOD}
 \label{sec:method}
@@ -130,38 +136,53 @@ submission V17 is the two-source WBF blend $D_{\mathrm{final}} =
 
 \begin{table}[t]
 \centering
-\caption{Component ablation on the 401-image meta-validation set.}
+\caption{\textbf{(a)} Construction of the honest student super-source
+$S^{*}$ on the 401-image leak-isolated meta-validation set
+(single-source; reproducible from archived predictions).
+\textbf{(b)} Contribution on the official held-out test set---the only
+leak-free instrument for the full pipeline, as V12 is leaked on
+meta-validation.}
 \label{tab:ablation}
 \small
 \begin{tabular}{lcc}
 \toprule
+\multicolumn{3}{l}{\textbf{(a) Meta-validation (student source only)}}\\
 \textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
 \midrule
-Per-fold baseline (fold 0)            & 0.394 & --- \\
-+ Pseudo-FT, fold 4 only              & 0.435 & $+0.041$ \\
-+ Multi-res TTA, fold 4 only          & 0.469 & $+0.034$ \\
-+ 3-fold (drop $f_0$), equal weights  & 0.471 & $+0.002$ \\
-+ V12 blend @ $w{=}0.25$ (V17)        & 0.471$^\dagger$ & --- \\
+Cold fold-0 baseline                  & 0.394 & --- \\
+Pseudo-FT student, fold 4             & 0.434 & $+0.040$ \\
++ Multi-res TTA (4 res, WBF)          & 0.469 & $+0.036$ \\
++ 3-fold WBF (drop $f_0$) $= S^{*}$   & 0.471 & $+0.002$ \\
+\midrule
+\multicolumn{3}{l}{\textbf{(b) Held-out test (full pipeline)}}\\
+\textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
+\midrule
+Plain 5-fold WBF ensemble             & 0.4720 & --- \\
+Teacher V12                           & 0.4755 & $+0.0035$ \\
+Full pipeline V17                     & \textbf{0.4776} & $+0.0021$ \\
 \bottomrule
-\end{tabular}\\[2pt]
-{\scriptsize $^\dagger$Meta-val cannot exceed V12 by adding an honest
-source (V12 is leaked on this split). Official held-out test:
-\textbf{0.4776}.}
+\end{tabular}
 \end{table}
 
-Table~\ref{tab:ablation} reports the component ablation.
-Pseudo-distillation contributed the largest single gain ($+0.041$):
-the soft signal in the teacher's confidence scores compensates for
-the small training set more effectively than the architectural
-alternatives we evaluated. Multi-resolution TTA added a further
-$+0.034$ because thin stripes a few pixels tall are resolved unevenly
-by YOLO's strided feature pyramid at any single input size. Dropping
-the domain-overlapping fold-0 from the cross-fold ensemble was
-net-positive: correlated predictions drag the WBF consensus when one
-source has seen the validation data during training. Blending the
-V12 teacher into the final fusion does not improve the leaked
-meta-val baseline but transfers cleanly to held-out test
-(V12 alone $= 0.4755 \to $ V17 $= 0.4776$).
+Table~\ref{tab:ablation}(a) decomposes the honest student source:
+pseudo-distillation is the largest single lever ($+0.040$), as the soft
+signal in the teacher's confidence scores compensates for the small
+training set; multi-resolution TTA adds $+0.036$ because thin stripes a
+few pixels tall are resolved unevenly by YOLO's strided feature pyramid
+at any single input size; and dropping the domain-overlapping fold-0 is
+net-positive because correlated predictions drag the WBF consensus.
+Table~\ref{tab:ablation}(b) is the honest counterpart, and the more
+important one: on genuinely unseen data the entire stack adds only
+$+0.0021$ over submitting the teacher and $+0.0056$ over a plain 5-fold
+ensemble. The $+0.077$ student source is, on test, largely redundant
+with the teacher, which already encodes the same multi-fold knowledge;
+the meta-validation ceiling (0.515) is moreover unbeatable there
+because V12 is leaked on that split. The stack also does not extend:
+raising the blend weight to $w{=}0.375$ gave 0.4768, and a more
+aggressive second-generation pseudo-FT blend regressed to 0.4566
+(below the teacher). Intermediate distillation stages were scored only
+on meta-validation, as official submissions were rate-limited to one
+per 12\,h.
 
 \textbf{Negative results.} A second architectural family (RF-DETR)
 plateaued at $+0.0002$ across six checkpoint--weight variants;
@@ -176,15 +197,17 @@ temperature-scaled calibration was at most $+0.0002$.
 \section{CONCLUSION}
 \label{sec:conclusion}
 
-The final pipeline reaches 0.4776 mAP$_{50\text{-}95}$ on the
-held-out test set; the meta-validation ablation chain
-(Table~\ref{tab:ablation}) totals $+0.077$ over the per-fold
-baseline. The submission placed the \emph{UdeM AI} team 28th of 172
-teams on the public leaderboard of ESA ClearSAR Track~1. All training and fine-tuning were performed on
-a single cloud NVIDIA A100 GPU. The largest remaining gap is at high
-IoU thresholds, where sub-pixel height accuracy dominates and a
-640-px input under-resolves the median $\approx$10-px stripe; sliced
-\emph{training} at 320-px tiles is the most promising next move.
+The final pipeline reaches 0.4776 mAP$_{50\text{-}95}$ on the held-out
+test set, placing the \emph{UdeM AI} team 28th of 172 teams in ESA
+ClearSAR Track~1, on a single cloud NVIDIA A100 GPU. The operationally
+honest takeaway, however, is that a quality-weighted multi-fold
+ensemble teacher recovers most of the attainable accuracy on unseen
+SAR data; the distillation--TTA--blend stack is a small, fragile top-up
+worthwhile only at a conservative blend weight. The largest remaining
+gap is at high IoU thresholds, where sub-pixel height accuracy
+dominates and a 640-px input under-resolves the median
+$\approx$10-px stripe; sliced \emph{training} at 320-px tiles is the
+most promising next move.
 
 \bibliographystyle{IEEEbib}
 \begin{thebibliography}{9}
