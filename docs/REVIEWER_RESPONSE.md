@@ -117,9 +117,12 @@ Beyond the two reviewer points, this revision also:
   released `yolo26x.pt`: 58{,}993{,}368 parameters). Base-training
   hyperparameters corrected to the actual run (`phase_a_fold0-2/args.yaml`,
   ultralytics 8.4.47): batch 16$\to$32, patience 20$\to$15, epoch cap
-  120$\to$100, and the learning-rate schedule cosine$\to$linear (final
-  $\eta_f{=}10^{-5}$ unchanged). MuSGD, box-gain 12.0, NWD ($\alpha{=}0.5$,
-  $C{=}12.8$), 3-epoch warmup, and 640\,px were confirmed correct, as were
+  120$\to$60, and the learning-rate schedule cosine$\to$linear (final
+  $\eta_f{=}10^{-5}$ unchanged). The student fine-tune (15 epochs) was
+  confirmed directly from the Thunder cloud run logs
+  (`runs\_thunder\_v18a/fold\{1,2,4\}/results.csv`). MuSGD, box-gain 12.0,
+  NWD ($\alpha{=}0.5$, $C{=}12.8$), 3-epoch warmup, and 640\,px were
+  confirmed correct, as were
   all dataset statistics (median image $515\times342$, box $140\times10$\,px,
   aspect $\approx$8:1) and the CLAHE settings (clip 3.0, $8\times8$, LAB-L).
 - **Number consistency.** The TTA delta is $+0.035$ (not $+0.036$), so
