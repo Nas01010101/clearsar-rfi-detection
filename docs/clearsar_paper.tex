@@ -101,39 +101,30 @@ We make three contributions:
 \section{RELATED WORK}
 \label{sec:rw}
 
-\textbf{SAR object detection.} Deep-learning SAR detection has been
-studied extensively for ships \cite{li2017ssdd,wang2019sarship} and
-aircraft \cite{chen2016sartarget}. These targets are compact (aspect
-ratios $\approx$1--4:1); RFI stripes are qualitatively different. The
-nearest analogous tasks are lane-line and wire/cable detection in RGB
-imagery, both of which favour architectures with elongated receptive
-fields.
-
-\textbf{Small object detection.} Standard detectors struggle when
-objects occupy fewer than 32$\times$32 pixels owing to limited feature
-map resolution and gradient imbalance \cite{liu2021smallsurvey}.
-Proposals for improvement include feature pyramid networks
-\cite{lin2017fpn}, transformer-based decoders \cite{carion2020detr},
-and modified regression losses. Normalised Wasserstein Distance (NWD)
-\cite{wang2021nwd} replaces IoU regression with a Wasserstein distance
-between Gaussian distributions centred on predicted and target boxes,
-yielding non-zero gradients for non-overlapping small targets.
+\textbf{SAR and small object detection.} Deep-learning SAR detection
+has been studied extensively for ships \cite{li2017ssdd,wang2019sarship}
+and aircraft \cite{chen2016sartarget}; these targets are compact
+(aspect ratios $\approx$1--4:1), unlike RFI stripes. Standard detectors
+also struggle below 32$\times$32\,px owing to limited feature-map
+resolution and gradient imbalance \cite{liu2021smallsurvey}, motivating
+feature pyramids \cite{lin2017fpn}, transformer decoders
+\cite{carion2020detr}, and modified regression losses. Normalised
+Wasserstein Distance (NWD) \cite{wang2021nwd} replaces IoU regression
+with a Wasserstein distance between Gaussians centred on predicted and
+target boxes, yielding non-zero gradients for non-overlapping small
+targets.
 
 \textbf{Pseudo-label distillation.} Knowledge distillation via
 pseudo-labels \cite{hinton2015distill,xie2020noisystudent} trains a
-student on predictions from a stronger teacher, transferring soft
-knowledge encoded in the teacher's confidence scores. When the teacher
-is a multi-fold ensemble and the student is fine-tuned on unlabelled
-in-distribution data, the approach is sometimes called noisy student
-training \cite{xie2020noisystudent} or self-training
-\cite{zoph2020rethinking}.
+student on a stronger teacher's predictions. When the teacher is a
+multi-fold ensemble and the student is fine-tuned on unlabelled
+in-distribution data, this is termed noisy-student training
+\cite{xie2020noisystudent} or self-training \cite{zoph2020rethinking}.
 
-\textbf{Test-time augmentation and WBF.} Ensemble methods aggregate
-predictions across multiple checkpoints or image transformations.
-WBF \cite{solovyev2021wbf} clusters overlapping detections and computes
-a weighted average of box coordinates, avoiding the precision-recall
-trade-off of NMS-based fusion, and is widely used when combining
-predictions at multiple resolutions.
+\textbf{Test-time augmentation and WBF.} WBF \cite{solovyev2021wbf}
+clusters overlapping detections and averages their coordinates,
+avoiding the precision--recall trade-off of NMS-based fusion, and is
+widely used when combining predictions across resolutions.
 
 \section{METHOD}
 \label{sec:method}
@@ -257,10 +248,13 @@ small-height regime characteristic of RFI stripes (median
 $\approx$10\,px).
 
 \textbf{Hyperparameters.} Base training runs for up to 60 epochs
-(early stopping, patience 15) with the MuSGD optimiser, initial
-learning rate $\eta_0{=}10^{-3}$ decaying linearly to
-$\eta_f{=}10^{-5}$, 3 warmup epochs, batch 32, 640\,px resolution,
-box-loss weight 12.0.
+(early stopping, patience 15) with the MuSGD optimiser (ultralytics
+8.4.47), initial learning rate $\eta_0{=}10^{-3}$ decaying linearly to
+$\eta_f{=}10^{-5}$ over 3 warmup epochs, momentum 0.937, weight decay
+$5{\times}10^{-4}$, batch 32, 640\,px resolution, and box/cls/dfl loss
+gains $12.0/0.5/1.5$. Mosaic ($p{=}1.0$) and light mixup ($p{=}0.1$)
+are enabled, with mosaic disabled for the final 10 epochs for clean
+coordinate refinement.
 
 \subsection{Pseudo-label distillation}
 \label{sec:pseudo}
@@ -380,16 +374,19 @@ teacher.
 \centering
 \caption{Contribution on the official held-out test set (the only
 leak-free instrument for the full pipeline). All three rows were scored
-by the challenge platform on the undisclosed 786-image partition.}
+by the challenge platform on the undisclosed 786-image partition. V12
+adds an RF-DETR member and a CLAHE-retrained fold to the plain
+ensemble; V17 adds the distillation super-source (pseudo-FT $+$
+multi-resolution TTA $+$ fold-drop $+$ blend).}
 \label{tab:heldout}
 \small
 \begin{tabular}{lcc}
 \toprule
 \textbf{Configuration} & \textbf{mAP$_{50\text{-}95}$} & $\Delta$ \\
 \midrule
-Plain 5-fold WBF ensemble             & 0.4720 & --- \\
-Teacher V12 (\,$+$RF-DETR,\,CLAHE swap) & 0.4755 & $+0.0035$ \\
-Full pipeline V17 (\,$+$distill\,$+$TTA\,$+$drop-$f_0$\,$+$blend) & \textbf{0.4776} & $+0.0021$ \\
+Plain 5-fold WBF ensemble & 0.4720 & --- \\
+Teacher V12               & 0.4755 & $+0.0035$ \\
+Full pipeline V17         & \textbf{0.4776} & $+0.0021$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -495,12 +492,11 @@ predictions that drag down the consensus.
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:blend} reports the leaked fold-0 validation
-mAP$_{50\text{-}95}$ at three super-source blend weights together with
-the corresponding official held-out test scores. The V12 source is
-itself leaked on fold-0 val, so the baseline at $w{=}0$ is the leaked
-ceiling; adding the leak-free super-source decreases leaked val
-monotonically while improving held-out test up to $w{=}0.25$.
+Table~\ref{tab:blend} pairs the leaked fold-0 validation
+mAP$_{50\text{-}95}$ with the official held-out test score at three
+blend weights. V12 is itself leaked on fold-0 val, so adding the
+leak-free super-source decreases leaked val monotonically while
+improving held-out test up to $w{=}0.25$.
 
 \subsection{Negative results}
 
