@@ -61,18 +61,20 @@ Full details, equations and ablations are in the [paper](docs/clearsar_paper.pdf
 
 ## Results
 
-Two measurements, deliberately kept separate (this is the paper's central, cautionary point — see the ICIP'26 reviewer responses below).
+Two measurements, deliberately kept separate (this is the paper's main point — see the ICIP'26 reviewer responses below).
 
-**(a) Construction of the honest student source** — on the 401-image leak-isolated meta-validation set (pycocotools; reproducible via `scripts/verify_ablation.py`):
+**(a) Construction of the student source** — on the 401-image leak-isolated meta-validation set, size/IoU-stratified (pycocotools; reproducible via `scripts/verify_ablation.py`):
 
-| Configuration | mAP@[.50:.95] | Δ |
-|---|---|---|
-| Cold fold-0 baseline | 0.394 | — |
-| Pseudo-FT student (fold 4) | 0.434 | +0.040 |
-| + Multi-resolution TTA (4 res, WBF) | 0.469 | +0.036 |
-| + 3-fold WBF (drop fold-0) = S* | 0.471 | +0.002 |
+| Configuration | AP | AP50 | AP75 | AP_small |
+|---|---|---|---|---|
+| Cold fold-0 baseline | 0.394 | 0.664 | 0.424 | 0.356 |
+| Pseudo-FT student (fold 4) | 0.434 | 0.706 | 0.464 | 0.372 |
+| + Multi-resolution TTA (4 res, WBF) | 0.469 | 0.746 | 0.511 | 0.411 |
+| **+ 3-fold WBF (drop fold-0) = S\*** | **0.471** | **0.752** | **0.522** | **0.418** |
 
-**(b) What actually transfers to genuinely unseen data** — official held-out test (challenge platform):
+AP chain totals +0.077 (distillation +0.040, TTA +0.035, fold-drop +0.002). AP75 stays the weakest column — residual error is at high IoU, where sub-pixel stripe height dominates.
+
+**(b) What actually transfers to genuinely unseen data** — official held-out test (challenge platform returns only the aggregate mAP):
 
 | Configuration | mAP@[.50:.95] | Δ |
 |---|---|---|
@@ -80,7 +82,7 @@ Two measurements, deliberately kept separate (this is the paper's central, cauti
 | Teacher V12 (+RF-DETR, CLAHE swap) | 0.4755 | +0.0035 |
 | **Full pipeline V17** (+distill +TTA +drop-f0 +blend) | **0.4776** | +0.0021 |
 
-**The honest reading:** the meta-val chain shows the student source gaining **+0.077** in isolation, but on unseen test that source is *largely redundant with the teacher* — the entire distillation/TTA/blend stack adds only **+0.0021** over simply submitting the teacher (and **+0.0056** over a plain 5-fold ensemble). Pushing harder regresses (w=0.375 → 0.4768; a 2nd-gen pseudo-FT blend → 0.4566, below the teacher). A quality-weighted multi-fold ensemble recovers most of the attainable accuracy on fresh SAR data; the stack is a small, fragile top-up.
+**The reading:** the meta-val chain shows the student source gaining **+0.077** in isolation, but on unseen test that source is redundant with the teacher — the entire distillation/TTA/blend stack adds only **+0.0021** over simply submitting the teacher (and **+0.0056** over a plain 5-fold ensemble). Pushing harder regresses (w=0.375 → 0.4768; a 2nd-gen pseudo-FT blend → 0.4566, below the teacher). A quality-weighted multi-fold ensemble recovers most of the attainable accuracy on fresh SAR data; the stack adds little beyond it.
 
 ### Negative results
 

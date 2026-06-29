@@ -25,8 +25,12 @@ except ImportError:
     weighted_boxes_fusion = None
 
 
-def coco_map(gt_path, dets):
-    """mAP@[.50:.95] for a flat COCO detection list against gt_path."""
+def coco_eval(gt_path, dets):
+    """Full COCOeval stats vector for a flat COCO detection list.
+
+    Returns a dict with the size/IoU-stratified averages reviewers expect:
+    AP@[.50:.95], AP50, AP75, and AP for small/medium/large areas.
+    """
     gt = COCO(gt_path)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(dets, f)
@@ -37,9 +41,16 @@ def coco_map(gt_path, dets):
         ev.evaluate()
         ev.accumulate()
         ev.summarize()
-        return float(ev.stats[0])  # AP @ IoU=0.50:0.95, all areas
+        s = ev.stats
+        return {"AP": float(s[0]), "AP50": float(s[1]), "AP75": float(s[2]),
+                "AP_s": float(s[3]), "AP_m": float(s[4]), "AP_l": float(s[5])}
     finally:
         os.unlink(tmp)
+
+
+def coco_map(gt_path, dets):
+    """mAP@[.50:.95] only (back-compat helper)."""
+    return coco_eval(gt_path, dets)["AP"]
 
 
 def load(path):
@@ -112,14 +123,14 @@ def main():
 
     # Stage: pseudo-FT student, fold 4, single resolution 640
     f4_640 = load(os.path.join(pf, "fold4_sz640.json"))
-    rows.append(("Pseudo-FT student (fold 4) @640", coco_map(gt, f4_640)))
+    rows.append(("Pseudo-FT student (fold 4) @640", coco_eval(gt, f4_640)))
 
     # Stage: + multi-resolution TTA (608/640/672/704) WBF, fold 4
     f4_tta = wbf_fuse(
         [load(os.path.join(pf, f"fold4_sz{r}.json")) for r in (608, 640, 672, 704)],
         gt,
     )
-    rows.append(("  + multi-res TTA (4 res, WBF)", coco_map(gt, f4_tta)))
+    rows.append(("  + multi-res TTA (4 res, WBF)", coco_eval(gt, f4_tta)))
 
     # Stage: + 3-fold cross-fold WBF dropping fold 0 (folds 1,2,4), each TTA-fused
     per_fold_tta = []
@@ -130,21 +141,24 @@ def main():
         )
         per_fold_tta.append(ft)
     super3 = wbf_fuse(per_fold_tta, gt)
-    rows.append(("  + 3-fold WBF (drop fold 0) = S*", coco_map(gt, super3)))
+    rows.append(("  + 3-fold WBF (drop fold 0) = S*", coco_eval(gt, super3)))
 
-    # Sanity: the archived pre-computed 3-fold drop0 eval
-    saved = os.path.join(A, "cpu_eval/v2_pseudo_ft_TTA_3fold_drop0_meta_val.eval.json")
-    if os.path.exists(saved):
-        rows.append(("  (archived S* eval, for reference)",
-                     load(saved)["mAP50-95"]))
-
-    print("\n==== Leak-isolated meta-validation ablation (mAP@[.50:.95]) ====")
+    print("\n==== Leak-isolated meta-validation ablation ====")
+    print(f"  {'Configuration':36s} {'AP':>6s} {'AP50':>6s} {'AP75':>6s} "
+          f"{'AP_s':>6s} {'AP_m':>6s} {'AP_l':>6s}")
     prev = None
     for name, m in rows:
-        delta = "" if prev is None or name.startswith("  (") else f"  (Δ {m - prev:+.4f})"
-        print(f"  {name:42s} {m:.4f}{delta}")
-        if not name.startswith("  ("):
-            prev = m
+        delta = "" if prev is None else f"  (dAP {m['AP'] - prev:+.4f})"
+        print(f"  {name:36s} {m['AP']:.4f} {m['AP50']:.4f} {m['AP75']:.4f} "
+              f"{m['AP_s']:.4f} {m['AP_m']:.4f} {m['AP_l']:.4f}{delta}")
+        prev = m["AP"]
+
+    saved = os.path.join(A, "cpu_eval/v2_pseudo_ft_TTA_3fold_drop0_meta_val.eval.json")
+    if os.path.exists(saved):
+        s = load(saved)
+        print(f"\n  Archived S* eval (reference): AP={s['mAP50-95']:.4f} "
+              f"AP50={s['mAP50']:.4f} AP75={s['mAP75']:.4f} "
+              f"AP_s={s['AP_small']:.4f} AP_m={s['AP_medium']:.4f} AP_l={s['AP_large']:.4f}")
 
 
 if __name__ == "__main__":

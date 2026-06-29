@@ -19,22 +19,20 @@ DISTILLATION AND MULTI-RESOLUTION ENSEMBLE}
 
 \begin{abstract}
 We describe the \emph{UdeM AI} team's solution to the ESA ClearSAR
-Track 1 Grand Challenge: Radio-Frequency Interference (RFI) detection
-in Sentinel-1 SAR quicklooks. Our pipeline combines a YOLO26x base
-detector with pixel-space Normalised Wasserstein Distance (NWD)
-regression, pseudo-label distillation from a multi-source ensemble
-teacher onto unlabelled test imagery, multi-resolution test-time
+Track~1 Grand Challenge: Radio-Frequency Interference (RFI) detection
+in Sentinel-1 SAR quicklooks. The pipeline combines a YOLO26x base
+detector with a pixel-space Normalised Wasserstein Distance (NWD)
+regression loss, pseudo-label distillation from a multi-source ensemble
+teacher onto the unlabelled test imagery, multi-resolution test-time
 augmentation (TTA) fused by Weighted Box Fusion (WBF), and a selective
-cross-fold ensemble that drops the domain-overlapping fold. On a
-401-image leak-isolated meta-validation set the honest student source
-built by this pipeline gains $+0.077$ mAP$_{50\text{-}95}$ over a cold
-per-fold baseline (distillation $+0.040$, TTA $+0.036$, fold dropping
-$+0.002$). The final submission reaches 0.4776 mAP$_{50\text{-}95}$ on
-the held-out test set, placing 28th of 172 teams. We also report the
-cautionary half of the story: on the genuinely unseen test set this
-student source is largely redundant with the ensemble teacher, so the
-full distillation--TTA--blend stack adds only $+0.0021$ over submitting
-the teacher alone. All training used a single cloud NVIDIA A100 GPU.
+cross-fold ensemble that drops the domain-overlapping fold. The final
+submission reaches 0.4776 mAP$_{50\text{-}95}$ on the held-out test
+set, 28th of 172 teams. We report two measurements. On a leak-isolated
+meta-validation set the distilled student source gains $+0.077$
+mAP$_{50\text{-}95}$ over a cold baseline; on the held-out test set the
+same source is redundant with the ensemble teacher, and the full
+distillation--TTA--blend stack adds only $+0.0021$ over the teacher
+alone. The gap between the two is the main result.
 \end{abstract}
 
 \begin{keywords}
@@ -61,11 +59,11 @@ resolutions above 640\,px amplify speckle relative to signal. The
 five-fold split is used to \emph{construct} diverse ensemble members,
 not as an out-of-fold generalisation estimator: cross-fold validation
 mAPs are leaked (each fold detector has seen the other folds' held-out
-images) and are never used for model selection. Honest generalisation
-is judged by two separate instruments---a 401-image leak-isolated
-meta-validation set sampled from the fold-0 validation pool (seed 42),
-used only as a single-model gate, and the official held-out test set,
-used for all model selection and final reporting.
+images) and are never used for model selection. We evaluate on two
+separate sets: a 401-image leak-isolated meta-validation set sampled
+from the fold-0 validation pool (seed 42), used as a single-model gate,
+and the official held-out test set, used for model selection and final
+reporting.
 
 \section{METHOD}
 \label{sec:method}
@@ -95,15 +93,16 @@ super-source $S^{*}$, and blended with V12 at $w{=}0.25$.}
 The pipeline (Figure~\ref{fig:pipeline}) has four stages.
 
 \textbf{Base detector.} YOLO26x \cite{ultralytics2024yolo11}
-($\approx$55.7\,M parameters, COCO pre-trained, no P2 head) trained
+($\approx$59\,M parameters, COCO pre-trained, no P2 head) trained
 with a CIoU\,+\,NWD box loss
 $\mathcal{L}_{\mathrm{box}} = (1{-}\alpha)\mathcal{L}_{\mathrm{CIoU}}
 {+}\alpha\mathcal{L}_{\mathrm{NWD}}$ at $\alpha{=}0.5$, with NWD
 \cite{wang2021nwd} computed in pixel space (normalisation constant
-$C{=}12.8$\,px). Ultralytics' \texttt{BboxLoss.forward} receives
-boxes in stride-relative grid units, so we multiply by the anchor
-stride before computing NWD; this keeps gradients non-saturating for
-the small heights characteristic of RFI ($\approx$10\,px median).
+$C{=}12.8$\,px). Ultralytics evaluates the box loss on coordinates
+normalised to the network input, so we rescale the positive boxes to
+pixel units before computing NWD; otherwise $C$ is far too large, the
+similarity saturates, and the gradient vanishes in the small-height
+regime characteristic of RFI ($\approx$10\,px median).
 Images are pre-processed with CLAHE (clip 3.0, $8\times8$ tiles) on
 the LAB L-channel. Horizontal and vertical flips are disabled.
 Training uses MuSGD for up to 120 epochs (patience 20) at 640\,px,
@@ -136,12 +135,11 @@ submission V17 is the two-source WBF blend $D_{\mathrm{final}} =
 
 \begin{table}[t]
 \centering
-\caption{\textbf{(a)} Construction of the honest student super-source
-$S^{*}$ on the 401-image leak-isolated meta-validation set
-(single-source; reproducible from archived predictions).
-\textbf{(b)} Contribution on the official held-out test set---the only
-leak-free instrument for the full pipeline, as V12 is leaked on
-meta-validation.}
+\caption{\textbf{(a)} Construction of the student super-source $S^{*}$
+on the 401-image leak-isolated meta-validation set (single-source;
+reproducible from archived predictions). \textbf{(b)} Contribution on
+the official held-out test set, the only leak-free measurement for the
+full pipeline (V12 is leaked on meta-validation).}
 \label{tab:ablation}
 \small
 \begin{tabular}{lcc}
@@ -151,7 +149,7 @@ meta-validation.}
 \midrule
 Cold fold-0 baseline                  & 0.394 & --- \\
 Pseudo-FT student, fold 4             & 0.434 & $+0.040$ \\
-+ Multi-res TTA (4 res, WBF)          & 0.469 & $+0.036$ \\
++ Multi-res TTA (4 res, WBF)          & 0.469 & $+0.035$ \\
 + 3-fold WBF (drop $f_0$) $= S^{*}$   & 0.471 & $+0.002$ \\
 \midrule
 \multicolumn{3}{l}{\textbf{(b) Held-out test (full pipeline)}}\\
@@ -164,25 +162,25 @@ Full pipeline V17                     & \textbf{0.4776} & $+0.0021$ \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:ablation}(a) decomposes the honest student source:
-pseudo-distillation is the largest single lever ($+0.040$), as the soft
-signal in the teacher's confidence scores compensates for the small
-training set; multi-resolution TTA adds $+0.036$ because thin stripes a
-few pixels tall are resolved unevenly by YOLO's strided feature pyramid
-at any single input size; and dropping the domain-overlapping fold-0 is
-net-positive because correlated predictions drag the WBF consensus.
-Table~\ref{tab:ablation}(b) is the honest counterpart, and the more
-important one: on genuinely unseen data the entire stack adds only
-$+0.0021$ over submitting the teacher and $+0.0056$ over a plain 5-fold
-ensemble. The $+0.077$ student source is, on test, largely redundant
-with the teacher, which already encodes the same multi-fold knowledge;
-the meta-validation ceiling (0.515) is moreover unbeatable there
-because V12 is leaked on that split. The stack also does not extend:
-raising the blend weight to $w{=}0.375$ gave 0.4768, and a more
-aggressive second-generation pseudo-FT blend regressed to 0.4566
-(below the teacher). Intermediate distillation stages were scored only
-on meta-validation, as official submissions were rate-limited to one
-per 12\,h.
+Table~\ref{tab:ablation}(a) decomposes the student source:
+pseudo-distillation is the largest single component ($+0.040$), as the
+soft signal in the teacher's confidence scores compensates for the
+small training set; multi-resolution TTA adds $+0.035$ because thin
+stripes a few pixels tall are resolved unevenly by YOLO's strided
+feature pyramid at any single input size; dropping the
+domain-overlapping fold-0 is net-positive because correlated
+predictions drag the WBF consensus. Small-box accuracy tracks the same
+chain (AP$_S$ $0.356\!\to\!0.418$); AP$_{75}$ stays the weakest column
+($0.522$ vs $0.752$ at AP$_{50}$), placing the residual error at high
+IoU. Table~\ref{tab:ablation}(b) measures transfer: on the held-out test set the full stack adds only
+$+0.0021$ over the teacher and $+0.0056$ over a plain 5-fold ensemble.
+The $+0.077$ student source is redundant with the teacher, which
+already encodes the same multi-fold knowledge; the meta-validation
+ceiling (0.515) is itself unreachable there because V12 is leaked on
+that split. Pushing further regresses: blend weight $w{=}0.375$ gives
+0.4768, and a second-generation pseudo-FT blend gives 0.4566, below the
+teacher. Intermediate stages were scored only on meta-validation, as
+official submissions were rate-limited to one per 12\,h.
 
 \textbf{Negative results.} A second architectural family (RF-DETR)
 plateaued at $+0.0002$ across six checkpoint--weight variants;
@@ -199,18 +197,16 @@ temperature-scaled calibration was at most $+0.0002$.
 
 The final pipeline reaches 0.4776 mAP$_{50\text{-}95}$ on the held-out
 test set, placing the \emph{UdeM AI} team 28th of 172 teams in ESA
-ClearSAR Track~1, on a single cloud NVIDIA A100 GPU. The operationally
-honest takeaway, however, is that a quality-weighted multi-fold
-ensemble teacher recovers most of the attainable accuracy on unseen
-SAR data; the distillation--TTA--blend stack is a small, fragile top-up
-worthwhile only at a conservative blend weight. The largest remaining
-gap is at high IoU thresholds, where sub-pixel height accuracy
-dominates and a 640-px input under-resolves the median
-$\approx$10-px stripe; sliced \emph{training} at 320-px tiles is the
-most promising next move.
+ClearSAR Track~1, on a single cloud NVIDIA A100 GPU. On unseen SAR data
+a quality-weighted multi-fold ensemble teacher recovers most of the
+attainable accuracy, and the distillation--TTA--blend stack adds little
+beyond it. The largest remaining gap is at high IoU thresholds, where
+sub-pixel height accuracy dominates and a 640-px input under-resolves
+the median $\approx$10-px stripe; sliced \emph{training} at 320-px
+tiles is the most promising next step.
 
 \bibliographystyle{IEEEbib}
-\begin{thebibliography}{9}
+\begin{thebibliography}{99}
 
 \bibitem{clearsar2026}
 European Space Agency,

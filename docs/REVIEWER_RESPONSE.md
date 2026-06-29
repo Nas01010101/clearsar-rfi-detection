@@ -96,11 +96,37 @@ above.
 
 ---
 
+## Additional camera-ready improvements
+
+Beyond the two reviewer points, this revision also:
+
+- **Size-/IoU-stratified ablation.** Table 2 now reports AP / AP$_{50}$ /
+  AP$_{75}$ / AP$_S$ (small-area), as expected for tiny-object detection.
+  AP$_S$ rises $0.356\to0.418$ along the chain; AP$_{75}$ is the weakest
+  column ($0.522$ vs $0.752$ at AP$_{50}$), locating the residual error
+  at high IoU. All numbers reproduced by `scripts/verify_ablation.py`.
+- **Three-item contributions list** added at the end of the
+  introduction (field convention for detection papers).
+- **Citation audit.** All 19 references verified against primary
+  sources (real, correctly attributed; arXiv IDs / venues / pages
+  checked). YOLO26 and its named modules (STAL, ProgLoss, MuSGD, P2
+  head) confirmed real.
+- **Factual correction.** Base-detector parameter count corrected from
+  $\approx$55.7\,M to $\approx$59\,M (measured directly from the
+  released `yolo26x.pt` checkpoint: 58{,}993{,}368 parameters).
+- **Number consistency.** The TTA delta is $+0.035$ (not $+0.036$), so
+  the meta-validation deltas sum to the reported $+0.077$.
+- **Tone pass.** Removed editorialising/LLM-tell phrasing throughout,
+  matching the terse, factual register of strong ICIP detection papers.
+
 ## Files changed
 
-- `docs/clearsar_paper.tex` — 5-page report (new Table 1 held-out;
-  Table 2 relabelled; eval-protocol and discussion rewritten).
+- `docs/clearsar_paper.tex` — 5-page report (new held-out Table 1;
+  size-stratified Table 2; contributions list; eval-protocol and
+  discussion rewritten; param count corrected; tone pass).
 - `docs/clearsar_abstract_2p.tex` — 2-page camera-ready abstract (same
-  changes, compacted; combined ablation table with panels (a)/(b)).
-- `scripts/verify_ablation.py` — reproduces the meta-val ablation chain.
-- `README.md` — results section updated to the two-table honest framing.
+  changes, compacted; combined ablation table with panels (a)/(b);
+  abstract trimmed to 142 words).
+- `scripts/verify_ablation.py` — reproduces the meta-val ablation chain
+  with the full AP / AP$_{50}$ / AP$_{75}$ / AP$_S$ breakdown.
+- `README.md` — results section updated to the two-table framing.
