@@ -105,8 +105,8 @@ similarity saturates, and the gradient vanishes in the small-height
 regime characteristic of RFI ($\approx$10\,px median).
 Images are pre-processed with CLAHE (clip 3.0, $8\times8$ tiles) on
 the LAB L-channel. Horizontal and vertical flips are disabled.
-Training uses MuSGD for up to 120 epochs (patience 20) at 640\,px,
-batch 16, $\eta_0{=}10^{-3}$ with cosine decay to $10^{-5}$.
+Training uses MuSGD for up to 100 epochs (patience 15) at 640\,px,
+batch 32, $\eta_0{=}10^{-3}$ decaying linearly to $10^{-5}$.
 
 \textbf{Pseudo-label distillation.} The teacher (V12) is our
 strongest pre-distillation ensemble: a single-stage WBF

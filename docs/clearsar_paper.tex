@@ -256,10 +256,11 @@ similarity to a near-constant, and removes the gradient in the
 small-height regime characteristic of RFI stripes (median
 $\approx$10\,px).
 
-\textbf{Hyperparameters.} Base training runs for up to 120 epochs
-(early stopping, patience 20) with the MuSGD optimiser, initial
-learning rate $\eta_0{=}10^{-3}$, cosine decay to $\eta_f{=}10^{-5}$,
-3 warmup epochs, batch 16, 640\,px resolution, box-loss weight 12.0.
+\textbf{Hyperparameters.} Base training runs for up to 100 epochs
+(early stopping, patience 15) with the MuSGD optimiser, initial
+learning rate $\eta_0{=}10^{-3}$ decaying linearly to
+$\eta_f{=}10^{-5}$, 3 warmup epochs, batch 32, 640\,px resolution,
+box-loss weight 12.0.
 
 \subsection{Pseudo-label distillation}
 \label{sec:pseudo}

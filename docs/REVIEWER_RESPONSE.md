@@ -111,9 +111,17 @@ Beyond the two reviewer points, this revision also:
   sources (real, correctly attributed; arXiv IDs / venues / pages
   checked). YOLO26 and its named modules (STAL, ProgLoss, MuSGD, P2
   head) confirmed real.
-- **Factual correction.** Base-detector parameter count corrected from
+- **Factual corrections (verified against the archived training
+  configs).** Base-detector parameter count corrected from
   $\approx$55.7\,M to $\approx$59\,M (measured directly from the
-  released `yolo26x.pt` checkpoint: 58{,}993{,}368 parameters).
+  released `yolo26x.pt`: 58{,}993{,}368 parameters). Base-training
+  hyperparameters corrected to the actual run (`phase_a_fold0-2/args.yaml`,
+  ultralytics 8.4.47): batch 16$\to$32, patience 20$\to$15, epoch cap
+  120$\to$100, and the learning-rate schedule cosine$\to$linear (final
+  $\eta_f{=}10^{-5}$ unchanged). MuSGD, box-gain 12.0, NWD ($\alpha{=}0.5$,
+  $C{=}12.8$), 3-epoch warmup, and 640\,px were confirmed correct, as were
+  all dataset statistics (median image $515\times342$, box $140\times10$\,px,
+  aspect $\approx$8:1) and the CLAHE settings (clip 3.0, $8\times8$, LAB-L).
 - **Number consistency.** The TTA delta is $+0.035$ (not $+0.036$), so
   the meta-validation deltas sum to the reported $+0.077$.
 - **Tone pass.** Removed editorialising/LLM-tell phrasing throughout,
