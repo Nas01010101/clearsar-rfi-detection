@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFI Detection in Sentinel-1 SAR Imagery — IEEE ICIP 2026</title>
+<meta name="description" content="Pseudo-label distillation and a multi-resolution ensemble for Radio-Frequency Interference detection in Sentinel-1 SAR quicklooks. ESA ClearSAR Track 1, IEEE ICIP 2026.">
+<style>
+  :root{
+    --bg:#fbfaf7; --panel:#fff; --ink:#1a1d24; --body:#3f4654; --muted:#6b7280;
+    --line:#e7e4dc; --line2:#efece5;
+    --amber:#d98a1f; --amber-soft:#fdf4e6; --cyan:#1597c4; --ink-soft:#2a2f3a;
+    --ok:#2e9e6b; --bad:#c2492f;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --w:880px;
+    --s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:64px;--s9:96px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--body);font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;font-size:17px}
+  .wrap{max-width:var(--w);margin:0 auto;padding:0 24px}
+  section{padding:var(--s8) 0;border-top:1px solid var(--line2)}
+  h1,h2,h3{color:var(--ink);font-weight:600;letter-spacing:-.01em}
+  h2{font-size:15px;font-family:var(--mono);font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--amber);margin-bottom:var(--s5)}
+  h3{font-size:21px;margin:var(--s6) 0 var(--s3)}
+  p{margin-bottom:var(--s4)} a{color:var(--cyan);text-decoration:none}
+  a:hover{text-decoration:underline} strong{color:var(--ink);font-weight:600}
+  .mono{font-family:var(--mono)}
+
+  /* hero */
+  .hero{text-align:center;padding:var(--s9) 0 var(--s8);border-top:none}
+  .venue{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--amber);margin-bottom:var(--s5)}
+  .hero h1{font-family:var(--serif);font-size:clamp(28px,4.6vw,46px);line-height:1.15;
+    color:var(--ink);max-width:18ch;margin:0 auto;font-weight:600;letter-spacing:-.02em}
+  .authors{margin-top:var(--s6);font-size:18px;color:var(--ink-soft)}
+  .authors a{color:var(--ink-soft);border-bottom:1px solid var(--line)}
+  .affil{margin-top:var(--s3);color:var(--muted);font-size:15px}
+  .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:var(--s7)}
+  .btn{display:inline-flex;align-items:center;gap:9px;padding:11px 20px;border-radius:999px;
+    background:var(--ink);color:#fff;font-size:15px;font-weight:500;border:1px solid var(--ink);
+    transition:transform .12s ease,background .12s ease}
+  .btn:hover{text-decoration:none;transform:translateY(-1px);background:#000}
+  .btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+  .btn.ghost:hover{background:var(--panel);border-color:var(--muted)}
+  .btn .i{font-size:16px}
+  .btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
+
+  /* result chips under hero */
+  .chips{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:var(--s7)}
+  .chip{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 16px;
+    display:flex;align-items:baseline;gap:8px}
+  .chip b{font-family:var(--mono);font-size:18px;color:var(--amber);font-weight:700}
+  .chip span{font-size:13px;color:var(--muted)}
+
+  /* SAR teaser */
+  .sar{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    background:linear-gradient(180deg,#0c1322,#0a0f1b);aspect-ratio:16/6;width:100%;
+    box-shadow:0 1px 0 rgba(0,0,0,.02)}
+  .sar::after{content:"SENTINEL-1 · QUICKLOOK (SCHEMATIC)";position:absolute;left:14px;bottom:10px;
+    font:600 10px/1 var(--mono);letter-spacing:.18em;color:#5d6982}
+  .sar .speckle{position:absolute;inset:0;opacity:.5;
+    background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(255,255,255,.018) 2px 3px)}
+  .stripe{position:absolute;left:6%;height:9px;border-radius:2px;
+    background:linear-gradient(90deg,rgba(255,184,77,.12),#ffb84d 30%,#fff2d6 50%,#ffb84d 70%,rgba(255,184,77,.12));
+    box-shadow:0 0 16px 2px rgba(255,184,77,.5)}
+  .box{position:absolute;left:4%;border:1.5px solid #4fd1ff;border-radius:3px;height:21px}
+  .box .tag{position:absolute;top:-16px;left:0;font:600 9px/1 var(--mono);color:#4fd1ff;
+    background:rgba(10,14,22,.85);padding:2px 4px;border-radius:3px}
+  .cap{margin-top:14px;font-size:14px;color:var(--muted);text-align:center}
+
+  /* abstract */
+  .abstract p{font-size:18px;color:var(--ink-soft);line-height:1.75}
+
+  /* pipeline */
+  .pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;justify-content:center;margin:var(--s5) 0}
+  .node{flex:1 1 120px;max-width:160px;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:13px 11px;text-align:center}
+  .node .n{font:600 10px/1 var(--mono);color:var(--muted);letter-spacing:.1em}
+  .node .t{margin-top:6px;font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.25}
+  .node .d{margin-top:4px;font:500 10px/1.3 var(--mono);color:var(--muted)}
+  .node.fin{border-color:var(--amber);background:var(--amber-soft)}
+  .node.fin .t{color:var(--amber)}
+
+  /* NWD box */
+  .nwd{background:var(--ink);color:#cfd6e4;border-radius:12px;padding:24px 28px;font-family:var(--mono);
+    font-size:15px;line-height:2;margin-top:var(--s4)}
+  .nwd .c{color:#6b7689} .nwd .hl{color:#ffb84d}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;margin:var(--s4) 0;font-size:15px}
+  caption{caption-side:top;text-align:left;font-size:14px;color:var(--muted);margin-bottom:10px}
+  th,td{text-align:right;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font:600 12px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  tbody td{font-family:var(--mono);color:var(--body)}
+  tbody td:first-child{font-family:var(--sans);color:var(--ink)}
+  tr.best td{color:var(--amber)} tr.best td:first-child{color:var(--amber);font-weight:600}
+  .up{color:var(--ok)}
+
+  /* the gap */
+  .gap{display:flex;gap:clamp(28px,8vw,90px);align-items:flex-end;justify-content:center;margin:var(--s6) 0 var(--s4)}
+  .bw{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .bv{font:700 clamp(24px,3.4vw,40px)/1 var(--mono)}
+  .bar{width:clamp(80px,13vw,130px);border-radius:7px 7px 0 0}
+  .bar.big{height:230px;background:linear-gradient(180deg,#e7a23c,#d98a1f)}
+  .bar.tiny{height:7px;background:#9aa3b2}
+  .bl{font-size:13px;color:var(--muted);text-align:center;max-width:20ch}
+  .bl b{color:var(--ink)}
+
+  /* negative grid */
+  .neg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:var(--s4)}
+  .nc{border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:18px}
+  .nc .h{font-size:14px;font-weight:600;color:var(--ink)}
+  .nc .v{font:700 19px/1 var(--mono);color:var(--bad);margin:8px 0 5px}
+  .nc .w{font-size:12.5px;color:var(--muted);line-height:1.4}
+
+  /* bibtex */
+  pre{background:var(--ink);color:#cfd6e4;border-radius:12px;padding:22px 24px;overflow-x:auto;
+    font-family:var(--mono);font-size:13.5px;line-height:1.7}
+  pre .k{color:#ffb84d}
+
+  footer{padding:var(--s7) 0;text-align:center;color:var(--muted);font-size:14px;border-top:1px solid var(--line2)}
+
+  @media(max-width:680px){
+    body{font-size:16px} section{padding:var(--s7) 0}
+    .gap{gap:32px} .bar.big{height:170px}
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div class="venue">IEEE ICIP 2026 · ESA ClearSAR Grand Challenge · Track 1</div>
+    <h1>RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label Distillation and Multi-Resolution Ensemble</h1>
+    <div class="authors"><a href="mailto:anaselghoudane@gmail.com">Anas Elghoudane</a></div>
+    <div class="affil">Independent Researcher · <em>UdeM AI</em></div>
+    <nav class="btns">
+      <a class="btn" href="./docs/clearsar_abstract_2p.pdf"><span class="i">▤</span> Abstract (PDF)</a>
+      <a class="btn ghost" href="./docs/clearsar_paper.pdf"><span class="i">▦</span> Full report</a>
+      <a class="btn ghost" href="#" aria-disabled="true"><span class="i">✦</span> arXiv (soon)</a>
+      <a class="btn ghost" href="https://github.com/Nas01010101/clearsar-rfi-detection"><span class="i">⌥</span> Code</a>
+    </nav>
+    <div class="chips">
+      <div class="chip"><b>0.4776</b><span>mAP@[.50:.95], held-out test</span></div>
+      <div class="chip"><b>28/172</b><span>teams</span></div>
+      <div class="chip"><b>1×A100</b><span>single GPU, solo entry</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- TEASER -->
+<section style="border-top:none;padding-top:0">
+  <div class="wrap">
+    <div class="sar" id="sar"><div class="speckle"></div></div>
+    <p class="cap">RFI appears as thin, near-full-width horizontal bands (median <strong>10&nbsp;px</strong> tall ×
+    <strong>140&nbsp;px</strong> wide, ≈8:1 aspect). <span style="color:var(--cyan)">Cyan</span> = predicted box.</p>
+  </div>
+</section>
+
+<!-- ABSTRACT -->
+<section class="abstract">
+  <div class="wrap">
+    <h2>Abstract</h2>
+    <p>We present a detection pipeline for Radio-Frequency Interference (RFI) in Sentinel-1 SAR
+    quicklook imagery, reaching <strong>0.4776 mAP<sub>50-95</sub></strong> on the held-out test set of
+    the ESA ClearSAR Track 1 challenge (28th of 172 teams). The pipeline combines a YOLO26x base
+    detector with a pixel-space Normalised Wasserstein Distance (NWD) regression loss, pseudo-label
+    distillation from a multi-source ensemble teacher onto the unlabelled test imagery,
+    multi-resolution test-time augmentation fused by Weighted Box Fusion (WBF), and a selective
+    cross-fold ensemble that drops the domain-overlapping fold.</p>
+    <p>On a leak-isolated meta-validation set the distilled student source gains
+    <strong>+0.077</strong> over a cold baseline — but on genuinely unseen data that source is
+    <strong>redundant</strong> with the ensemble teacher, and the full stack adds only
+    <strong>+0.0021</strong> over submitting the teacher alone. We report both measurements; the gap
+    between them is the main result.</p>
+  </div>
+</section>
+
+<!-- METHOD -->
+<section>
+  <div class="wrap">
+    <h2>Method</h2>
+    <p>Four stages turn five per-fold detectors into one honest super-source, blended with the teacher.</p>
+    <div class="pipe">
+      <div class="node"><div class="n">01</div><div class="t">YOLO26x base</div><div class="d">5 folds · CLAHE · NWD</div></div>
+      <div class="node"><div class="n">02</div><div class="t">V12 teacher</div><div class="d">WBF · 0.4755</div></div>
+      <div class="node"><div class="n">03</div><div class="t">Pseudo-label</div><div class="d">786 test · conf≥0.75</div></div>
+      <div class="node"><div class="n">04</div><div class="t">Student FT</div><div class="d">folds 1,2,4</div></div>
+      <div class="node"><div class="n">05</div><div class="t">Multi-res TTA</div><div class="d">608–704 · WBF</div></div>
+      <div class="node"><div class="n">06</div><div class="t">Drop fold-0</div><div class="d">cross-fold → S*</div></div>
+      <div class="node fin"><div class="n">07</div><div class="t">Blend 0.25</div><div class="d">S* ⊕ V12 → 0.4776</div></div>
+    </div>
+
+    <h3>A loss that survives thin boxes</h3>
+    <p>For a 10-px stripe, predicted and target boxes rarely overlap, so CIoU gives no gradient. We
+    blend in a pixel-space NWD: each box becomes a 2-D Gaussian and we measure the Wasserstein-2
+    distance — smooth even with zero overlap.</p>
+    <div class="nwd">
+      <div class="c">// box → Gaussian</div>
+      <div>μ = (c<sub>x</sub>, c<sub>y</sub>)&nbsp;&nbsp;&nbsp;Σ = diag(w²⁄4, h²⁄4)</div>
+      <div class="c" style="margin-top:8px">// similarity, C = 12.8 px</div>
+      <div>W₂² = ‖Δμ‖² + ¼(Δw² + Δh²)</div>
+      <div class="hl">NWD = exp(−√W₂² ⁄ C)</div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section>
+  <div class="wrap">
+    <h2>Results</h2>
+    <table>
+      <caption>Building the honest student source — leak-isolated meta-validation (size/IoU-stratified).</caption>
+      <thead><tr><th>Configuration</th><th>AP</th><th>AP₅₀</th><th>AP₇₅</th><th>AP<sub>S</sub></th></tr></thead>
+      <tbody>
+        <tr><td>Cold fold-0 baseline</td><td>0.394</td><td>0.664</td><td>0.424</td><td>0.356</td></tr>
+        <tr><td>+ Pseudo-FT student</td><td>0.434</td><td>0.706</td><td>0.464</td><td>0.372</td></tr>
+        <tr><td>+ Multi-resolution TTA</td><td>0.469</td><td>0.746</td><td>0.511</td><td>0.411</td></tr>
+        <tr class="best"><td>+ 3-fold WBF (drop f₀) = S*</td><td>0.471</td><td>0.752</td><td>0.522</td><td>0.418</td></tr>
+      </tbody>
+    </table>
+
+    <h3>…but almost none of it transfers</h3>
+    <div class="gap">
+      <div class="bw">
+        <div class="bv" style="color:var(--amber)">+0.077</div>
+        <div class="bar big"></div>
+        <div class="bl"><b>Meta-validation</b><br>student source, in isolation</div>
+      </div>
+      <div class="bw">
+        <div class="bv" style="color:var(--muted)">+0.0021</div>
+        <div class="bar tiny"></div>
+        <div class="bl"><b>Held-out test</b><br>full stack over the teacher</div>
+      </div>
+    </div>
+    <p>On genuinely unseen data the entire distillation–TTA–blend stack adds <strong>+0.0021</strong>
+    over the teacher (a <strong>~37× smaller</strong> gain) and <strong>+0.0056</strong> over a plain
+    5-fold ensemble. The takeaway: a quality-weighted multi-fold ensemble recovers most of the
+    attainable accuracy on fresh SAR data; the stack is a small, fragile top-up.</p>
+
+    <h3>Quantified negative results</h3>
+    <div class="neg">
+      <div class="nc"><div class="h">RF-DETR family</div><div class="v">+0.0002</div><div class="w">Saturated across 6 variants.</div></div>
+      <div class="nc"><div class="h">D-FINE-X, 10 ep</div><div class="v">3×10⁻⁴</div><div class="w">Needs far more epochs.</div></div>
+      <div class="nc"><div class="h">SAHI, 320-px tiles</div><div class="v">−0.085</div><div class="w">Fragments long stripes.</div></div>
+      <div class="nc"><div class="h">H-flip TTA</div><div class="v">−6.5%</div><div class="w">SAR geometry is asymmetric.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- BIBTEX -->
+<section>
+  <div class="wrap">
+    <h2>BibTeX</h2>
+    <pre><span class="k">@inproceedings</span>{elghoudane2026rfi,
+  title     = {RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label
+               Distillation and Multi-Resolution Ensemble},
+  author    = {Elghoudane, Anas},
+  booktitle = {IEEE International Conference on Image Processing Workshops (ICIPW)},
+  year      = {2026},
+  note      = {ESA ClearSAR Track 1 Grand Challenge}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Built from <a href="https://github.com/Nas01010101/clearsar-rfi-detection">the project repository</a>.
+    Layout inspired by the Nerfies/academic project-page template.
+  </div>
+</footer>
+
+<script>
+  // crisp RFI stripe placement
+  var sar=document.getElementById('sar');
+  if(sar){
+    [{t:24,w:80},{t:50,w:62},{t:74,w:90}].forEach(function(r){
+      var s=document.createElement('div');s.className='stripe';
+      s.style.top=r.t+'%';s.style.width=r.w+'%';sar.appendChild(s);
+      var b=document.createElement('div');b.className='box';
+      b.style.top='calc('+r.t+'% - 6px)';b.style.width=(r.w+4)+'%';
+      var t=document.createElement('span');t.className='tag';t.textContent='RFI';
+      b.appendChild(t);sar.appendChild(b);
+    });
+  }
+</script>
+</body>
+</html>
