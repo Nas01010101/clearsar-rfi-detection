@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RFI Detection in Sentinel-1 SAR Imagery — IEEE ICIP 2026</title>
-  <meta name="description" content="Pseudo-label distillation and a multi-resolution ensemble for RFI detection in Sentinel-1 SAR quicklooks. ESA ClearSAR Track 1, IEEE ICIP 2026.">
+  <meta name="description" content="Pseudo-label distillation and a multi-resolution ensemble for RFI detection in Sentinel-1 SAR quicklooks. ESA ClearSAR Track 1, IEEE ICIP 2026. Interactive walkthrough + charts.">
 
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
@@ -12,136 +12,151 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
 
   <style>
-    body { font-family: 'Noto Sans', sans-serif; }
-    .publication-title { font-family: 'Google Sans', sans-serif; }
-    .publication-authors { font-family: 'Google Sans', sans-serif; }
-    .author-block { display: inline-block; }
-    .publication-authors a { color: hsl(204, 86%, 43%) !important; }
-    .publication-authors a:hover { text-decoration: underline; }
-    .link-block a { margin-top: 5px; margin-bottom: 5px; }
-    .footer .icon-link { font-size: 25px; color: #000; }
-    .hero.is-light .navbar { background: none; }
-    .content-spaced { margin-top: 1.5rem; margin-bottom: 1.5rem; }
+    :root{ --amber:#d98a1f; --amber-h:hsl(28,75%,42%); --cyan:#1597c4; --ink:#1a1d24; --ok:#2e9e6b; --bad:#c2492f; }
+    html,body{ overflow-x:hidden; }
+    body { font-family:'Noto Sans',sans-serif; color:#2b2f38; }
+    pre{ overflow-x:auto; max-width:100%; }
+    pre code{ white-space:pre-wrap; overflow-wrap:anywhere; }
+    .section .columns{ margin-left:0; margin-right:0; }
+    canvas, #viz{ width:100%; height:auto; aspect-ratio:4/3; max-width:100%; display:block; }
+    .panel>div, .slider-row>div, .gap, .steps{ min-width:0; }
+    svg{ max-width:100%; display:block; overflow:hidden; }
+    section{ overflow-x:clip; }   /* belt-and-suspenders: no section can widen the page */
+    @media(max-width:600px){
+      .publication-title{ font-size:1.55rem!important; line-height:1.2; }
+      .stat-chips{ gap:.4rem; } .stat-chips .tag{ font-size:.8rem; width:100%; justify-content:center; }
+      .gap{ gap:1.5rem!important; } .slider-row{ grid-template-columns:1fr!important; }
+      .panel{ padding:1.1rem; } .section{ padding:2.2rem 0; }
+    }
+    .publication-title{ font-family:'Google Sans',sans-serif; }
+    .publication-authors{ font-family:'Google Sans',sans-serif; }
+    .publication-authors a{ color:hsl(204,86%,43%)!important; }
+    .link-block a{ margin:5px; }
+    .footer .icon-link{ font-size:25px; color:#000; }
+    .kicker{ letter-spacing:.12em; color:var(--amber-h); text-transform:uppercase; font-weight:600; }
+    .stat-chips{ display:flex; gap:.6rem; justify-content:center; flex-wrap:wrap; margin-top:1.5rem; }
+    .stat-chips .tag{ font-size:1rem; padding:1rem .9rem; }
+    .stat-chips .tag b{ font-family:monospace; color:var(--amber-h); margin-right:.4rem; font-size:1.15rem; }
+    tr.best td{ color:var(--amber-h); font-weight:600; }
+    .mono{ font-family:monospace; }
 
-    /* result chips */
-    .stat-chips { display:flex; gap:.6rem; justify-content:center; flex-wrap:wrap; margin-top:1.5rem; }
-    .stat-chips .tag { font-size:1rem; padding:1rem .9rem; }
-    .stat-chips .tag b { font-family:monospace; color:hsl(28,75%,42%); margin-right:.4rem; font-size:1.15rem; }
+    /* ---- SAR scene + overlay ---- */
+    .scene{ position:relative; width:100%; border-radius:10px; overflow:hidden; background:#0a0f1b; aspect-ratio:16/7; }
+    .scene img{ width:100%; height:100%; object-fit:cover; display:block; filter:grayscale(.92) contrast(1.18) brightness(.6); }
+    .scene .synth{ position:absolute; inset:0; background:linear-gradient(180deg,#0c1322,#0a0f1b); }
+    .scene .overlay{ position:absolute; inset:0; }
+    .scene .speckle{ position:absolute; inset:0; opacity:.5;
+      background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(255,255,255,.02) 2px 3px); }
+    .scene .stripe{ position:absolute; left:5%; border-radius:2px;
+      background:linear-gradient(90deg,rgba(255,184,77,.10),#ffb84d 30%,#fff2d6 50%,#ffb84d 70%,rgba(255,184,77,.10));
+      box-shadow:0 0 16px 2px rgba(255,184,77,.45); }
+    .scene svg{ position:absolute; inset:0; width:100%; height:100%; }
+    .scene .lbl{ position:absolute; left:12px; bottom:9px; font:600 10px/1 monospace; letter-spacing:.16em; color:#7c8aa6; }
+    .det rect{ fill:none; stroke:var(--cyan); stroke-width:.5; transition:all .5s cubic-bezier(.2,.7,.2,1); }
+    .det text{ fill:var(--cyan); font:600 2.6px monospace; }
+    @media (prefers-reduced-motion:reduce){ .det rect{ transition:none; } }
 
-    /* SAR teaser */
-    .sar { position:relative; border-radius:10px; overflow:hidden;
-      background:linear-gradient(180deg,#0c1322,#0a0f1b); aspect-ratio:16/6; width:100%; }
-    .sar::after{ content:"SENTINEL-1 · QUICKLOOK (SCHEMATIC)"; position:absolute; left:14px; bottom:10px;
-      font:600 10px/1 monospace; letter-spacing:.18em; color:#5d6982; }
-    .sar .speckle{ position:absolute; inset:0; opacity:.5;
-      background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(255,255,255,.018) 2px 3px); }
-    .stripe{ position:absolute; left:6%; height:9px; border-radius:2px;
-      background:linear-gradient(90deg,rgba(255,184,77,.12),#ffb84d 30%,#fff2d6 50%,#ffb84d 70%,rgba(255,184,77,.12));
-      box-shadow:0 0 16px 2px rgba(255,184,77,.5); }
-    .box{ position:absolute; left:4%; border:1.5px solid #4fd1ff; border-radius:3px; height:21px; }
-    .box .t{ position:absolute; top:-16px; left:0; font:600 9px/1 monospace; color:#4fd1ff;
-      background:rgba(10,14,22,.85); padding:2px 4px; border-radius:3px; }
+    /* ---- architecture walkthrough ---- */
+    .walk-controls{ display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; justify-content:center; margin:1rem 0 1.25rem; }
+    .steps{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+    .step{ position:relative; border:1px solid #e0e0e0; background:#fff; border-radius:9px; padding:9px 11px;
+      cursor:pointer; min-width:96px; text-align:center; transition:border-color .15s, transform .15s, box-shadow .15s; }
+    .step:hover{ border-color:#c2a06a; transform:translateY(-1px); }
+    .step .sn{ font:600 10px/1 monospace; color:#aaa; }
+    .step .st{ font-size:12.5px; font-weight:600; color:#363636; margin-top:4px; line-height:1.2; }
+    .step.active{ border-color:var(--amber); box-shadow:0 0 0 2px hsla(28,75%,55%,.25); background:hsl(38,90%,97%); }
+    .step.active .st{ color:var(--amber-h); }
+    .step.done{ border-color:#cfe6d8; }
+    .step:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+    .panel{ display:grid; grid-template-columns:1.1fr .9fr; gap:1.5rem; align-items:center;
+      border:1px solid #ececec; border-radius:12px; padding:1.5rem; background:#fcfbf9; min-height:230px; }
+    .panel .pn{ font:600 11px/1 monospace; letter-spacing:.1em; color:var(--amber-h); text-transform:uppercase; }
+    .panel h4{ font-family:'Google Sans',sans-serif; font-size:1.4rem; color:var(--ink); margin:.35rem 0 .6rem; }
+    .panel .pwhat{ color:#444; font-size:1rem; line-height:1.6; }
+    .panel .pparams{ margin-top:.9rem; font-family:monospace; font-size:12.5px; color:#777; }
+    .vizbox{ background:#0c1322; border-radius:10px; aspect-ratio:4/3; width:100%; }
+    @media(max-width:760px){ .panel{ grid-template-columns:1fr; } }
 
-    /* pipeline */
-    .pipe{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
-    .node{ flex:1 1 120px; max-width:160px; background:#fff; border:1px solid #e3e3e3; border-radius:9px;
-      padding:12px 10px; text-align:center; }
-    .node .n{ font:600 10px/1 monospace; color:#999; letter-spacing:.1em; }
-    .node .tt{ margin-top:6px; font-size:13px; font-weight:600; color:#363636; line-height:1.25; }
-    .node .d{ margin-top:4px; font:500 10px/1.3 monospace; color:#888; }
-    .node.fin{ border-color:hsl(28,75%,55%); background:hsl(38,90%,96%); }
-    .node.fin .tt{ color:hsl(28,75%,42%); }
+    /* ---- charts ---- */
+    .chart-card{ border:1px solid #ececec; border-radius:12px; padding:1.5rem; background:#fff; }
+    .abar{ transition:height 1s cubic-bezier(.2,.7,.2,1), y 1s cubic-bezier(.2,.7,.2,1); }
+    @media (prefers-reduced-motion:reduce){ .abar{ transition:none; } }
+    .legend{ display:flex; gap:1.2rem; justify-content:center; flex-wrap:wrap; font-size:.85rem; color:#666; margin-top:.6rem; }
+    .legend i{ width:11px; height:11px; border-radius:2px; display:inline-block; margin-right:5px; vertical-align:middle; }
+    .tip{ position:fixed; pointer-events:none; background:#1a1d24; color:#eee; font:600 11px/1.5 monospace;
+      padding:7px 9px; border-radius:6px; opacity:0; transition:opacity .12s; z-index:50; white-space:nowrap; }
 
-    /* NWD */
-    .nwd{ background:#1a1d24; color:#cfd6e4; border-radius:10px; padding:20px 24px;
-      font-family:monospace; font-size:14px; line-height:2; }
-    .nwd .c{ color:#6b7689; } .nwd .hl{ color:#ffb84d; }
-
-    /* gap figure */
-    .gap{ display:flex; gap:6rem; align-items:flex-end; justify-content:center; margin:1rem 0; }
+    /* gap */
+    .gap{ display:flex; gap:6rem; align-items:flex-end; justify-content:center; margin:1.5rem 0 1rem; }
     .bw{ display:flex; flex-direction:column; align-items:center; gap:12px; }
-    .bv{ font:700 2rem/1 monospace; }
-    .bar{ width:120px; border-radius:6px 6px 0 0; }
-    .bar.big{ height:220px; background:linear-gradient(180deg,#e7a23c,#d98a1f); }
-    .bar.tiny{ height:7px; background:#b5bcc7; }
+    .bv{ font:700 2.1rem/1 monospace; }
+    .bar{ width:120px; border-radius:6px 6px 0 0; transition:height 1.1s cubic-bezier(.2,.7,.2,1); height:0; }
+    .bar.big{ background:linear-gradient(180deg,#e7a23c,#d98a1f); }
+    .bar.tiny{ background:#b5bcc7; }
     .bl{ font-size:.85rem; color:#777; text-align:center; max-width:20ch; }
     .bl b{ color:#363636; }
-    @media(max-width:600px){ .gap{ gap:2.5rem; } .bar.big{ height:150px; } .bar{ width:90px; } }
+    @media(max-width:600px){ .gap{ gap:2.5rem; } .bar{ width:84px; } }
 
-    tr.best td{ color:hsl(28,75%,42%); font-weight:600; }
+    /* blend slider */
+    .slider-card{ border:1px solid #ececec; border-radius:12px; padding:1.75rem; background:#fcfbf9; }
+    .slider-row{ display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-top:1.25rem; }
+    .readout{ text-align:center; border:1px solid #eee; border-radius:10px; padding:1rem; background:#fff; }
+    .readout .rl{ font:600 11px/1 monospace; letter-spacing:.08em; text-transform:uppercase; color:#999; }
+    .readout .rv{ font:700 2rem/1 monospace; margin-top:.4rem; }
+    input[type=range]{ width:100%; accent-color:var(--amber); }
+    .wlabels{ display:flex; justify-content:space-between; font:600 12px/1 monospace; color:#888; margin-top:.4rem; }
   </style>
 </head>
 <body>
 
-<!-- HERO -->
+<!-- ============ HERO ============ -->
 <section class="hero">
   <div class="hero-body">
-    <div class="container is-max-desktop">
-      <div class="columns is-centered">
-        <div class="column has-text-centered">
-          <p class="is-size-6 has-text-weight-semibold" style="letter-spacing:.12em;color:hsl(28,75%,42%);text-transform:uppercase;">
-            IEEE ICIP 2026 · ESA ClearSAR Grand Challenge · Track 1
-          </p>
-          <h1 class="title is-2 publication-title" style="margin-top:1rem;">
-            RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label Distillation and Multi-Resolution Ensemble
-          </h1>
-          <div class="is-size-5 publication-authors">
-            <span class="author-block"><a href="mailto:anaselghoudane@gmail.com">Anas Elghoudane</a></span>
-          </div>
-          <div class="is-size-6 publication-authors" style="margin-top:.5rem;">
-            <span class="author-block">Independent Researcher · <i>UdeM AI</i></span>
-          </div>
-
-          <div class="column has-text-centered">
-            <div class="publication-links">
-              <span class="link-block">
-                <a href="./docs/clearsar_abstract_2p.pdf" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="fas fa-file-pdf"></i></span><span>Abstract</span>
-                </a>
-              </span>
-              <span class="link-block">
-                <a href="./docs/clearsar_paper.pdf" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="fas fa-file-lines"></i></span><span>Full Report</span>
-                </a>
-              </span>
-              <span class="link-block">
-                <a href="#" class="external-link button is-normal is-rounded is-dark" aria-disabled="true" style="opacity:.55;pointer-events:none;">
-                  <span class="icon"><i class="ai ai-arxiv"></i></span><span>arXiv (soon)</span>
-                </a>
-              </span>
-              <span class="link-block">
-                <a href="https://github.com/Nas01010101/clearsar-rfi-detection" class="external-link button is-normal is-rounded is-dark">
-                  <span class="icon"><i class="fab fa-github"></i></span><span>Code</span>
-                </a>
-              </span>
-            </div>
-          </div>
-
-          <div class="stat-chips">
-            <span class="tag is-white is-medium"><b>0.4776</b> mAP@[.50:.95], held-out test</span>
-            <span class="tag is-white is-medium"><b>28/172</b> teams</span>
-            <span class="tag is-white is-medium"><b>1×A100</b> solo entry</span>
-          </div>
-        </div>
+    <div class="container is-max-desktop has-text-centered">
+      <p class="is-size-6 kicker">IEEE ICIP 2026 · ESA ClearSAR Grand Challenge · Track 1</p>
+      <h1 class="title is-2 publication-title" style="margin-top:1rem;">
+        RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label Distillation and Multi-Resolution Ensemble
+      </h1>
+      <div class="is-size-5 publication-authors"><a href="mailto:anaselghoudane@gmail.com">Anas Elghoudane</a></div>
+      <div class="is-size-6 publication-authors" style="margin-top:.4rem;">Independent Researcher · <i>UdeM AI</i></div>
+      <div class="publication-links" style="margin-top:1.5rem;">
+        <span class="link-block"><a href="./docs/clearsar_abstract_2p.pdf" class="button is-rounded is-dark"><span class="icon"><i class="fas fa-file-pdf"></i></span><span>Abstract</span></a></span>
+        <span class="link-block"><a href="./docs/clearsar_paper.pdf" class="button is-rounded is-dark"><span class="icon"><i class="fas fa-file-lines"></i></span><span>Full Report</span></a></span>
+        <span class="link-block"><a href="#" class="button is-rounded is-dark" aria-disabled="true" style="opacity:.55;pointer-events:none;"><span class="icon"><i class="ai ai-arxiv"></i></span><span>arXiv (soon)</span></a></span>
+        <span class="link-block"><a href="https://github.com/Nas01010101/clearsar-rfi-detection" class="button is-rounded is-dark"><span class="icon"><i class="fab fa-github"></i></span><span>Code</span></a></span>
+      </div>
+      <div class="stat-chips">
+        <span class="tag is-white is-medium"><b>0.4776</b> mAP@[.50:.95], held-out test</span>
+        <span class="tag is-white is-medium"><b>28/172</b> teams</span>
+        <span class="tag is-white is-medium"><b>1×A100</b> solo entry</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- TEASER -->
-<section class="hero teaser">
+<!-- ============ TEASER: real SAR scene ============ -->
+<section class="hero" style="padding-top:0">
   <div class="container is-max-desktop">
-    <div class="hero-body">
-      <div class="sar" id="sar"><div class="speckle"></div></div>
-      <h2 class="subtitle has-text-centered" style="margin-top:1rem;font-size:1rem;color:#777;">
-        RFI appears as thin, near-full-width horizontal bands (median <b>10&nbsp;px</b> tall ×
-        <b>140&nbsp;px</b> wide, ≈8:1 aspect). <span style="color:hsl(195,80%,40%)">Cyan</span> = predicted box.
-      </h2>
+    <div class="scene" id="scene">
+      <img id="sarImg" alt="Real Sentinel-1 SAR scene (open data)" src="./assets/sar_real.jpg"
+           onerror="this.style.display='none';document.getElementById('synth').style.display='block';">
+      <div class="synth" id="synth" style="display:none">
+        <div class="speckle"></div>
+      </div>
+      <div class="overlay" id="overlay"></div>
+      <svg id="detLayer" class="det" viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="lbl" id="sceneLbl">SENTINEL-1 · SAR · COPERNICUS OPEN DATA</div>
     </div>
+    <p class="has-text-centered is-size-7 has-text-grey" style="margin-top:.7rem" id="sceneCredit">
+      A real Copernicus <b>Sentinel-1</b> C-band SAR scene (Antarctic subglacial-lake outburst), shown as a SAR backdrop.
+      RFI itself appears as thin, near-full-width horizontal bands (median <b>10&nbsp;px</b> × <b>140&nbsp;px</b>, ≈8:1) — the
+      amber bands and <span style="color:var(--cyan)">cyan</span> boxes here are <b>illustrative of the detection task</b>, as the ESA ClearSAR RFI imagery is licence-restricted.
+      <br><span style="opacity:.8">Image: contains modified Copernicus Sentinel data, processed by ESA, CC BY-SA 3.0 IGO.</span>
+    </p>
   </div>
 </section>
 
-<!-- ABSTRACT -->
+<!-- ============ ABSTRACT ============ -->
 <section class="section">
   <div class="container is-max-desktop">
     <div class="columns is-centered has-text-centered">
@@ -158,99 +173,92 @@
           <p>On a leak-isolated meta-validation set the distilled student source gains <b>+0.077</b> over a
           cold baseline — but on genuinely unseen data that source is <b>redundant</b> with the ensemble
           teacher, and the full stack adds only <b>+0.0021</b> over submitting the teacher alone. We report
-          both measurements; the gap between them is the main result.</p>
+          both; the gap between them is the main result.</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- METHOD -->
+<!-- ============ INTERACTIVE ARCHITECTURE ============ -->
 <section class="section" style="background:#fafafa;">
   <div class="container is-max-desktop">
-    <div class="columns is-centered">
-      <div class="column is-full">
-        <h2 class="title is-3 has-text-centered">Method</h2>
-        <p class="has-text-centered content-spaced">Four stages turn five per-fold detectors into one
-        honest super-source, blended with the teacher.</p>
-        <div class="pipe">
-          <div class="node"><div class="n">01</div><div class="tt">YOLO26x base</div><div class="d">5 folds · CLAHE · NWD</div></div>
-          <div class="node"><div class="n">02</div><div class="tt">V12 teacher</div><div class="d">WBF · 0.4755</div></div>
-          <div class="node"><div class="n">03</div><div class="tt">Pseudo-label</div><div class="d">786 test · ≥0.75</div></div>
-          <div class="node"><div class="n">04</div><div class="tt">Student FT</div><div class="d">folds 1,2,4</div></div>
-          <div class="node"><div class="n">05</div><div class="tt">Multi-res TTA</div><div class="d">608–704 · WBF</div></div>
-          <div class="node"><div class="n">06</div><div class="tt">Drop fold-0</div><div class="d">cross-fold → S*</div></div>
-          <div class="node fin"><div class="n">07</div><div class="tt">Blend 0.25</div><div class="d">S* ⊕ V12 → 0.4776</div></div>
-        </div>
-
-        <h3 class="title is-5" style="margin-top:2.5rem;">A loss that survives thin boxes</h3>
-        <div class="content">
-          <p>For a 10-px stripe, predicted and target boxes rarely overlap, so CIoU gives no gradient. We
-          blend in a pixel-space NWD: each box becomes a 2-D Gaussian and we measure the Wasserstein-2
-          distance — smooth even with zero overlap.</p>
-        </div>
-        <div class="nwd">
-          <div class="c">// box → Gaussian</div>
-          <div>μ = (c<sub>x</sub>, c<sub>y</sub>) &nbsp;&nbsp; Σ = diag(w²⁄4, h²⁄4)</div>
-          <div class="c" style="margin-top:8px;">// similarity, C = 12.8 px</div>
-          <div>W₂² = ‖Δμ‖² + ¼(Δw² + Δh²)</div>
-          <div class="hl">NWD = exp(−√W₂² ⁄ C)</div>
-        </div>
+    <h2 class="title is-3 has-text-centered">How the model works</h2>
+    <p class="has-text-centered content" style="max-width:60ch;margin:0 auto 1rem;">
+      Step through the pipeline — each stage shows what the model does and how the detections on the scene above evolve.
+    </p>
+    <div class="walk-controls">
+      <button id="playBtn" class="button is-rounded is-dark"><span class="icon"><i class="fas fa-play"></i></span><span>Play walkthrough</span></button>
+      <button id="prevBtn" class="button is-rounded" aria-label="Previous stage"><span class="icon"><i class="fas fa-chevron-left"></i></span></button>
+      <button id="nextBtn" class="button is-rounded" aria-label="Next stage"><span class="icon"><i class="fas fa-chevron-right"></i></span></button>
+    </div>
+    <div class="steps" id="steps" role="tablist" aria-label="Pipeline stages"></div>
+    <div class="panel" style="margin-top:1.25rem;">
+      <div>
+        <div class="pn" id="pPhase">Stage 1 / 7</div>
+        <h4 id="pName">—</h4>
+        <p class="pwhat" id="pWhat">—</p>
+        <div class="pparams" id="pParams">—</div>
       </div>
+      <div><canvas class="vizbox" id="viz" width="480" height="360"></canvas></div>
     </div>
   </div>
 </section>
 
-<!-- RESULTS -->
+<!-- ============ RESULTS ============ -->
 <section class="section">
   <div class="container is-max-desktop">
     <h2 class="title is-3 has-text-centered">Results</h2>
 
-    <div class="content">
-      <p class="has-text-grey">Building the honest student source — leak-isolated meta-validation (size/IoU-stratified).</p>
-      <table class="table is-fullwidth is-hoverable">
-        <thead><tr><th>Configuration</th><th class="has-text-right">AP</th><th class="has-text-right">AP₅₀</th><th class="has-text-right">AP₇₅</th><th class="has-text-right">AP<sub>S</sub></th></tr></thead>
-        <tbody>
-          <tr><td>Cold fold-0 baseline</td><td class="has-text-right">0.394</td><td class="has-text-right">0.664</td><td class="has-text-right">0.424</td><td class="has-text-right">0.356</td></tr>
-          <tr><td>+ Pseudo-FT student</td><td class="has-text-right">0.434</td><td class="has-text-right">0.706</td><td class="has-text-right">0.464</td><td class="has-text-right">0.372</td></tr>
-          <tr><td>+ Multi-resolution TTA</td><td class="has-text-right">0.469</td><td class="has-text-right">0.746</td><td class="has-text-right">0.511</td><td class="has-text-right">0.411</td></tr>
-          <tr class="best"><td>+ 3-fold WBF (drop f₀) = S*</td><td class="has-text-right">0.471</td><td class="has-text-right">0.752</td><td class="has-text-right">0.522</td><td class="has-text-right">0.418</td></tr>
-        </tbody>
-      </table>
+    <!-- animated ablation chart -->
+    <div class="chart-card" id="ablCard" style="margin-bottom:1.5rem;">
+      <p class="has-text-weight-semibold">Building the honest student source <span class="has-text-grey is-size-7">— leak-isolated meta-validation, animated</span></p>
+      <svg id="ablChart" viewBox="0 0 640 280" style="width:100%;height:auto;"></svg>
+      <div class="legend">
+        <span><i style="background:#d98a1f"></i>AP</span>
+        <span><i style="background:#6aaed6"></i>AP₅₀</span>
+        <span><i style="background:#9ecae1"></i>AP₇₅</span>
+        <span><i style="background:#c6dbef"></i>AP<sub>small</sub></span>
+        <span class="has-text-grey">hover bars for values</span>
+      </div>
     </div>
 
-    <h3 class="title is-5 has-text-centered" style="margin-top:2rem;">…but almost none of it transfers</h3>
-    <div class="gap">
+    <!-- the gap -->
+    <h3 class="title is-5 has-text-centered" id="gapHead">…but almost none of it transfers</h3>
+    <div class="gap" id="gapFig">
       <div class="bw">
-        <div class="bv" style="color:hsl(28,75%,42%)">+0.077</div>
-        <div class="bar big"></div>
+        <div class="bv" style="color:var(--amber-h)" id="gapBig">+0.000</div>
+        <div class="bar big" data-h="220"></div>
         <div class="bl"><b>Meta-validation</b><br>student source, in isolation</div>
       </div>
       <div class="bw">
-        <div class="bv" style="color:#999">+0.0021</div>
-        <div class="bar tiny"></div>
+        <div class="bv" style="color:#999" id="gapSmall">+0.0000</div>
+        <div class="bar tiny" data-h="7"></div>
         <div class="bl"><b>Held-out test</b><br>full stack over the teacher</div>
       </div>
     </div>
-    <div class="content has-text-centered">
-      <p>On genuinely unseen data the entire distillation–TTA–blend stack adds <b>+0.0021</b> over the
-      teacher (a <b>~37× smaller</b> gain) and <b>+0.0056</b> over a plain 5-fold ensemble. A
-      quality-weighted multi-fold ensemble recovers most of the attainable accuracy on fresh SAR data;
-      the stack is a small, fragile top-up.</p>
-    </div>
+    <p class="has-text-centered content" style="max-width:62ch;margin:1rem auto 0;">
+      On unseen data the entire distillation–TTA–blend stack adds <b>+0.0021</b> over the teacher (a
+      <b>~37× smaller</b> gain) and <b>+0.0056</b> over a plain 5-fold ensemble.
+    </p>
 
-    <h3 class="title is-5 has-text-centered" style="margin-top:2rem;">Quantified negative results</h3>
-    <div class="columns is-multiline">
-      <div class="column is-one-quarter"><div class="box has-text-centered"><p class="heading">RF-DETR family</p><p class="title is-5 has-text-danger">+0.0002</p><p class="is-size-7 has-text-grey">Saturated, 6 variants</p></div></div>
-      <div class="column is-one-quarter"><div class="box has-text-centered"><p class="heading">D-FINE-X, 10 ep</p><p class="title is-5 has-text-danger">3×10⁻⁴</p><p class="is-size-7 has-text-grey">Needs more epochs</p></div></div>
-      <div class="column is-one-quarter"><div class="box has-text-centered"><p class="heading">SAHI 320-px</p><p class="title is-5 has-text-danger">−0.085</p><p class="is-size-7 has-text-grey">Fragments stripes</p></div></div>
-      <div class="column is-one-quarter"><div class="box has-text-centered"><p class="heading">H-flip TTA</p><p class="title is-5 has-text-danger">−6.5%</p><p class="is-size-7 has-text-grey">SAR is asymmetric</p></div></div>
+    <!-- interactive blend slider -->
+    <div class="slider-card" style="margin-top:2rem;">
+      <p class="has-text-weight-semibold has-text-centered">Try it: the blend weight <span class="mono">w</span></p>
+      <p class="has-text-centered is-size-7 has-text-grey">Drag to the three submitted weights. Adding the leak-free source <em>lowers</em> the leaked validation score while <em>raising</em> the honest held-out test — up to w = 0.25.</p>
+      <input type="range" id="wSlider" min="0" max="2" step="1" value="1" aria-label="Blend weight">
+      <div class="wlabels"><span>w = 0.00</span><span>w = 0.25</span><span>w = 0.375</span></div>
+      <div class="slider-row">
+        <div class="readout"><div class="rl">Leaked fold-0 val</div><div class="rv" id="roVal" style="color:#999">0.5148</div></div>
+        <div class="readout"><div class="rl">Official held-out test</div><div class="rv" id="roTest" style="color:var(--amber-h)">0.4776</div></div>
+      </div>
+      <p class="has-text-centered is-size-7 has-text-grey" style="margin-top:.8rem;" id="wNote">w = 0.25 → <b>0.4776</b>, the best official score (V17).</p>
     </div>
   </div>
 </section>
 
-<!-- BIBTEX -->
-<section class="section" id="BibTeX">
+<!-- ============ BIBTEX ============ -->
+<section class="section" id="BibTeX" style="background:#fafafa;">
   <div class="container is-max-desktop content">
     <h2 class="title is-3">BibTeX</h2>
     <pre><code>@inproceedings{elghoudane2026rfi,
@@ -265,27 +273,224 @@
 </section>
 
 <footer class="footer">
-  <div class="container">
-    <div class="content has-text-centered">
-      <p>
-        <a class="icon-link" href="./docs/clearsar_abstract_2p.pdf"><i class="fas fa-file-pdf"></i></a>
-        <a class="icon-link" href="https://github.com/Nas01010101/clearsar-rfi-detection"><i class="fab fa-github"></i></a>
-      </p>
-      <p class="is-size-7">
-        Page built from the <a href="https://github.com/Nas01010101/clearsar-rfi-detection">project repository</a>.
-        Template adapted from <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>.
-      </p>
-    </div>
+  <div class="container has-text-centered content">
+    <p>
+      <a class="icon-link" href="./docs/clearsar_abstract_2p.pdf"><i class="fas fa-file-pdf"></i></a>
+      <a class="icon-link" href="https://github.com/Nas01010101/clearsar-rfi-detection"><i class="fab fa-github"></i></a>
+    </p>
+    <p class="is-size-7" id="footCredit">
+      Template adapted from <a href="https://github.com/nerfies/nerfies.github.io">Nerfies</a>.
+      SAR backdrop: contains modified Copernicus Sentinel data, processed by
+      <a href="https://commons.wikimedia.org/wiki/File:Subglacial_lake_outburst_fractures_and_elevation_change_ESA511318.jpg">ESA</a>, CC BY-SA 3.0 IGO.
+    </p>
   </div>
 </footer>
 
+<div class="tip" id="tip"></div>
+
 <script>
-  var sar=document.getElementById('sar');
-  if(sar){[{t:24,w:80},{t:50,w:62},{t:74,w:90}].forEach(function(r){
-    var s=document.createElement('div');s.className='stripe';s.style.top=r.t+'%';s.style.width=r.w+'%';sar.appendChild(s);
-    var b=document.createElement('div');b.className='box';b.style.top='calc('+r.t+'% - 6px)';b.style.width=(r.w+4)+'%';
-    var t=document.createElement('span');t.className='t';t.textContent='RFI';b.appendChild(t);sar.appendChild(b);
-  });}
+"use strict";
+var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- shared illustrative detections per stage (viewBox 100x44) ---------- */
+/* each box: x,y,w,h in viewBox units; conf shown as label. Boxes tighten + gain conf along the pipeline. */
+var SCENE_STATES = {
+  1:[ {x:8,y:9,w:80,h:4,c:.41},{x:14,y:22,w:60,h:5,c:.38},{x:10,y:33,w:86,h:4,c:.36} ],   // base: loose
+  2:[ {x:7,y:9.5,w:82,h:3.4,c:.55},{x:13,y:22,w:62,h:3.8,c:.5},{x:9,y:33,w:88,h:3.6,c:.52} ],
+  4:[ {x:7,y:9.6,w:83,h:3.2,c:.62},{x:13,y:22.2,w:63,h:3.4,c:.58},{x:9,y:33.1,w:88,h:3.3,c:.6} ],
+  5:[ {x:6.6,y:9.7,w:84,h:3.0,c:.71},{x:12.6,y:22.3,w:64,h:3.1,c:.66},{x:8.6,y:33.2,w:89,h:3.0,c:.69} ],
+  7:[ {x:6.4,y:9.8,w:84.5,h:2.8,c:.78},{x:12.4,y:22.4,w:64.5,h:2.9,c:.74},{x:8.4,y:33.3,w:89.5,h:2.8,c:.77} ]
+};
+function stateFor(stage){ // pick nearest defined state at or before the stage
+  var keys=[1,2,4,5,7], pick=1; keys.forEach(function(k){ if(stage>=k) pick=k; }); return SCENE_STATES[pick];
+}
+var detLayer=document.getElementById('detLayer');
+function drawScene(stage){
+  var s=stateFor(stage), html='';
+  s.forEach(function(b){
+    html+='<rect x="'+b.x+'" y="'+b.y+'" width="'+b.w+'" height="'+b.h+'" rx="0.5"/>'+
+          '<text x="'+(b.x+0.6)+'" y="'+(b.y-0.8)+'">RFI '+b.c.toFixed(2)+'</text>';
+  });
+  detLayer.innerHTML=html;
+}
+
+/* also draw synthetic amber stripes (behind boxes) so the fallback + real image both read as "RFI scene" */
+(function stripes(){
+  var overlay=document.getElementById('overlay');
+  [{t:20,h:2.6},{t:49,h:2.0},{t:74,h:2.4}].forEach(function(r){
+    var d=document.createElement('div'); d.className='stripe';
+    d.style.top=r.t+'%'; d.style.height=(r.h*1.6)+'%'; d.style.width=(60+r.t/3)+'%'; overlay.appendChild(d);
+  });
+})();
+
+/* ---------- architecture walkthrough ---------- */
+var STAGES=[
+  {n:'Base detector', what:'Five YOLO26x detectors are trained on stratified folds of the 3,154 labelled images, with CLAHE contrast and a pixel-space NWD loss so thin, non-overlapping boxes still get a gradient.', params:'5 folds · 640 px · MuSGD · NWD α=0.5, C=12.8', viz:'folds'},
+  {n:'Ensemble teacher (V12)', what:'The five folds (plus an RF-DETR member) are fused with Weighted Box Fusion — overlapping detections are averaged, not discarded — into a strong teacher scoring 0.4755.', params:'WBF · IoU 0.70 · conf-type max → 0.4755', viz:'wbf'},
+  {n:'Pseudo-label the test set', what:'The teacher labels the 786 unlabelled test images, keeping only confident boxes. This turns the test set into extra, in-distribution training signal.', params:'conf ≥ 0.75 · ≤20 boxes/img → 600 images', viz:'pseudo'},
+  {n:'Student fine-tune', what:'Per-fold students are fine-tuned on the pseudo-labelled data with the backbone frozen for 10 epochs — distilling the teacher’s knowledge into single models.', params:'folds 1,2,4 · AdamW 1e-4 · freeze 10 · 15 ep', viz:'student'},
+  {n:'Multi-resolution TTA', what:'Each student runs at four input sizes; thin stripes resolve unevenly across scales, so fusing them with WBF recovers boxes any single resolution misses.', params:'608 / 640 / 672 / 704 px · WBF', viz:'tta'},
+  {n:'Selective cross-fold', what:'The per-fold sources are fused — but fold-0 overlaps the validation pool and drags the consensus, so dropping it (a smaller ensemble) is net-positive.', params:'WBF(f1,f2,f4), drop f0 → S*', viz:'drop'},
+  {n:'Blend → V17', what:'The honest super-source S* is blended into the teacher at a conservative weight. On unseen data this adds only +0.0021 over the teacher — the paper’s central finding.', params:'WBF(V12, S* @ w=0.25) → 0.4776', viz:'blend'}
+];
+var cur=0, timer=null;
+var stepsEl=document.getElementById('steps');
+STAGES.forEach(function(s,k){
+  var b=document.createElement('button');
+  b.className='step'; b.setAttribute('role','tab'); b.id='step'+k;
+  b.innerHTML='<div class="sn">0'+(k+1)+'</div><div class="st">'+s.n+'</div>';
+  b.onclick=function(){ stop(); select(k); };
+  b.onkeydown=function(e){ if(e.key==='ArrowRight'){e.preventDefault();stop();select(cur+1);} else if(e.key==='ArrowLeft'){e.preventDefault();stop();select(cur-1);} };
+  stepsEl.appendChild(b);
+});
+var stepEls=Array.prototype.slice.call(stepsEl.children);
+
+var viz=document.getElementById('viz'), ctx=viz.getContext('2d');
+function select(k){
+  cur=((k%STAGES.length)+STAGES.length)%STAGES.length;
+  var s=STAGES[cur];
+  document.getElementById('pPhase').textContent='Stage '+(cur+1)+' / 7';
+  document.getElementById('pName').textContent=s.n;
+  document.getElementById('pWhat').textContent=s.what;
+  document.getElementById('pParams').textContent=s.params;
+  stepEls.forEach(function(e,x){ e.classList.toggle('active',x===cur); e.classList.toggle('done',x<cur); e.setAttribute('aria-selected',x===cur); });
+  drawScene(cur+1);
+  drawViz(s.viz);
+}
+function stop(){ if(timer){ clearInterval(timer); timer=null; setPlay(false); } }
+function setPlay(on){ var b=document.getElementById('playBtn'); b.innerHTML = on
+  ? '<span class="icon"><i class="fas fa-pause"></i></span><span>Pause</span>'
+  : '<span class="icon"><i class="fas fa-play"></i></span><span>Play walkthrough</span>'; }
+document.getElementById('playBtn').onclick=function(){
+  if(timer){ stop(); return; }
+  setPlay(true); if(cur===STAGES.length-1) select(0);
+  timer=setInterval(function(){ if(cur>=STAGES.length-1){ stop(); } else { select(cur+1); } }, 2600);
+};
+document.getElementById('nextBtn').onclick=function(){ stop(); select(cur+1); };
+document.getElementById('prevBtn').onclick=function(){ stop(); select(cur-1); };
+
+/* ---- per-stage mini visualisations on the canvas ---- */
+var AM='#d98a1f', CY='#4fd1ff', MUT='#5d6982', W='#e9eef8';
+function clear(){ ctx.clearRect(0,0,480,360); ctx.fillStyle='#0c1322'; ctx.fillRect(0,0,480,360); }
+function box(x,y,w,h,col,lw){ ctx.strokeStyle=col; ctx.lineWidth=lw||2; ctx.strokeRect(x,y,w,h); }
+function label(t,x,y,col,sz){ ctx.fillStyle=col||MUT; ctx.font='600 '+(sz||13)+'px monospace'; ctx.fillText(t,x,y); }
+function stripe(x,y,w,h){ var g=ctx.createLinearGradient(x,0,x+w,0); g.addColorStop(0,'rgba(255,184,77,.1)'); g.addColorStop(.5,'#ffd98a'); g.addColorStop(1,'rgba(255,184,77,.1)'); ctx.fillStyle=g; ctx.fillRect(x,y,w,h); }
+function drawViz(kind){
+  clear();
+  if(kind==='folds'){
+    label('5 fold detectors',24,34,W,15);
+    for(var i=0;i<5;i++){ var x=30+i*86; ctx.fillStyle='#16203a'; ctx.fillRect(x,70,68,210);
+      box(x,70,68,210,'#2b3b5e',1.5); label('fold '+i,x+10,300,MUT,12);
+      stripe(x+8,120,52,7); stripe(x+8,170,52,6); box(x+6,116,56,15,CY,1); box(x+6,166,56,13,CY,1); }
+  } else if(kind==='wbf'){
+    label('WBF · overlapping boxes → one',24,34,W,14);
+    stripe(120,150,240,12);
+    box(120,140,240,30,'#3b5e8a',1.5); box(135,150,225,20,'#3b5e8a',1.5); box(110,146,250,26,'#3b5e8a',1.5);
+    box(120,145,240,24,AM,3); label('fused 0.4755',150,300,AM,15);
+  } else if(kind==='pseudo'){
+    label('teacher labels 786 test imgs',24,34,W,14);
+    for(var r=0;r<2;r++)for(var c=0;c<3;c++){ var x=40+c*140, y=70+r*120; ctx.fillStyle='#101a30'; ctx.fillRect(x,y,118,96); box(x,y,118,96,'#243049',1.5);
+      stripe(x+12,y+34,94,6); box(x+10,y+30,98,13,CY,1.5); label('≥0.75',x+12,y+88,CY,11); }
+  } else if(kind==='student'){
+    label('distil teacher → student',24,34,W,14);
+    box(40,90,150,170,'#2b3b5e',1.5); label('teacher',70,280,MUT,13); stripe(55,150,120,8); box(53,145,124,16,AM,2);
+    ctx.strokeStyle=AM; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(200,170); ctx.lineTo(280,170); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(280,170); ctx.lineTo(270,164); ctx.lineTo(270,176); ctx.closePath(); ctx.fillStyle=AM; ctx.fill();
+    box(290,90,150,170,'#16345a','1.5'); label('student',330,280,MUT,13); stripe(305,150,120,8); box(303,145,124,16,CY,2);
+    label('freeze 10 · 15 ep',150,330,MUT,12);
+  } else if(kind==='tta'){
+    label('4 resolutions → WBF',24,34,W,14);
+    var res=[608,640,672,704];
+    for(var i2=0;i2<4;i2++){ var x=30+i2*112, s=0.78+i2*0.06; var w=80*s; ctx.fillStyle='#101a30'; ctx.fillRect(x,80,90,90); box(x,80,90,90,'#243049',1.4);
+      stripe(x+10,118,70,5+i2); box(x+8,114,74,12+i2,CY,1.2); label(res[i2]+'px',x+12,200,MUT,12); }
+    box(150,240,180,40,AM,2.5); stripe(160,253,160,12); label('fused',360,265,AM,13);
+  } else if(kind==='drop'){
+    label('drop fold-0 from the fusion',24,34,W,14);
+    var labels=['f0','f1','f2','f4']; var drop=0;
+    for(var i3=0;i3<4;i3++){ var x=40+i3*108; var on=i3!==drop; ctx.fillStyle=on?'#16203a':'#0f1626'; ctx.fillRect(x,80,86,160);
+      box(x,80,86,160,on?AM:'#33405e',on?2.4:1.4); label(labels[i3],x+28,300,on?AM:'#54607c',14);
+      if(!on){ ctx.strokeStyle='#c2492f'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(x,80);ctx.lineTo(x+86,240);ctx.moveTo(x+86,80);ctx.lineTo(x,240); ctx.stroke(); label('leak',x+24,330,'#c2492f',11);} }
+    label('S* = WBF(f1,f2,f4)',150,355,W,13);
+  } else if(kind==='blend'){
+    label('blend honest source into teacher',24,34,W,14);
+    // two bars combining
+    ctx.fillStyle='#3b5e8a'; ctx.fillRect(70,120,90,160); label('V12',95,300,MUT,13); label('1.0',98,112,'#9bb4d6',12);
+    ctx.fillStyle=AM; ctx.fillRect(220,210,90,70); label('S*',250,300,AM,13); label('0.25',238,202,'#e7a23c',12);
+    ctx.strokeStyle=W; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(330,200); ctx.lineTo(380,200); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(380,200);ctx.lineTo(370,194);ctx.lineTo(370,206);ctx.closePath(); ctx.fillStyle=W; ctx.fill();
+    ctx.fillStyle='#1c1606'; ctx.fillRect(390,150,70,130); box(390,150,70,130,AM,2.5); label('V17',408,300,AM,14); label('0.4776',392,140,AM,13);
+  }
+}
+
+/* ---------- animated ablation chart ---------- */
+var ABL=[
+  {name:'Cold base', AP:.394, AP50:.664, AP75:.424, APs:.356},
+  {name:'+Pseudo-FT', AP:.434, AP50:.706, AP75:.464, APs:.372},
+  {name:'+Multi-res TTA', AP:.469, AP50:.746, AP75:.511, APs:.411},
+  {name:'+3-fold (S*)', AP:.471, AP50:.752, AP75:.522, APs:.418}
+];
+var ablSvg=document.getElementById('ablChart');
+(function buildAbl(){
+  var W=640,H=280, padL=44,padB=46,padT=14,padR=10;
+  var cols=['#d98a1f','#6aaed6','#9ecae1','#c6dbef'], keys=['AP','AP50','AP75','APs'], knm=['AP','AP₅₀','AP₇₅','AP_small'];
+  var plotH=H-padB-padT, plotW=W-padL-padR, gW=plotW/ABL.length, bw=gW/(keys.length+1.3);
+  var s='', maxV=0.85;
+  // axes gridlines
+  for(var g=0;g<=4;g++){ var yv=g/4*0.8; var y=H-padB-(yv/maxV)*plotH;
+    s+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="#eee"/>'+
+       '<text x="'+(padL-8)+'" y="'+(y+4)+'" text-anchor="end" font-family="monospace" font-size="10" fill="#aaa">'+yv.toFixed(1)+'</text>'; }
+  ABL.forEach(function(d,i){
+    var gx=padL+i*gW+bw*0.6;
+    keys.forEach(function(k,j){
+      var x=gx+j*bw, full=H-padB, h=(d[k]/maxV)*plotH;
+      s+='<rect class="abar" x="'+x.toFixed(1)+'" y="'+full+'" width="'+(bw-2).toFixed(1)+'" height="0" rx="1.5" fill="'+cols[j]+'" '+
+         'data-final="'+h.toFixed(1)+'" data-tip="'+d.name+' · '+knm[j]+' = '+d[k].toFixed(3)+'"></rect>';
+    });
+    s+='<text x="'+(padL+i*gW+gW/2)+'" y="'+(H-padB+18)+'" text-anchor="middle" font-family="monospace" font-size="11" fill="#555">'+d.name+'</text>';
+  });
+  ablSvg.innerHTML=s;
+})();
+var ablBars=ablSvg.querySelectorAll('.abar');
+function animateAbl(){ ablBars.forEach(function(b){ var hf=+b.getAttribute('data-final'); var full=280-46;
+  if(reduce){ b.setAttribute('height',hf); b.setAttribute('y',full-hf); }
+  else { b.setAttribute('y',full-hf); b.setAttribute('height',hf); } }); }
+/* tooltips */
+var tip=document.getElementById('tip');
+ablBars.forEach(function(b){
+  b.addEventListener('mousemove',function(e){ tip.textContent=b.getAttribute('data-tip'); tip.style.opacity=1; tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY-10)+'px'; });
+  b.addEventListener('mouseleave',function(){ tip.style.opacity=0; });
+});
+
+/* ---------- gap count-up ---------- */
+function countUp(el,to,dec,prefix){ if(reduce){ el.textContent=prefix+to.toFixed(dec); return; }
+  var t0=null,dur=1100; function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/dur,1); var e=1-Math.pow(1-p,3);
+    el.textContent=prefix+(to*e).toFixed(dec); if(p<1) requestAnimationFrame(step); } requestAnimationFrame(step); }
+function animateGap(){
+  document.querySelectorAll('#gapFig .bar').forEach(function(b){ b.style.height=b.getAttribute('data-h')+'px'; });
+  countUp(document.getElementById('gapBig'),0.077,3,'+');
+  countUp(document.getElementById('gapSmall'),0.0021,4,'+');
+}
+
+/* ---------- interactive blend slider ---------- */
+var W_VALS=[0,0.25,0.375], TESTV=[0.4755,0.4776,0.4768], VALV=[0.5154,0.5148,0.5135];
+var NOTES=[ 'w = 0 → <b>0.4755</b> — the teacher alone (V12).',
+            'w = 0.25 → <b>0.4776</b>, the best official score (V17).',
+            'w = 0.375 → <b>0.4768</b> — pushing harder regresses.' ];
+var wS=document.getElementById('wSlider');
+function updW(){ var i=+wS.value; document.getElementById('roVal').textContent=VALV[i].toFixed(4);
+  document.getElementById('roTest').textContent=TESTV[i].toFixed(4); document.getElementById('wNote').innerHTML=NOTES[i];
+  document.getElementById('roTest').style.color = i===1 ? 'var(--amber-h)' : '#555'; }
+wS.addEventListener('input',updW); updW();
+
+/* ---------- scroll triggers ---------- */
+function onView(el,fn){ if(!('IntersectionObserver' in window)){ fn(); return; }
+  var io=new IntersectionObserver(function(es){ es.forEach(function(en){ if(en.isIntersecting){ fn(); io.disconnect(); } }); },{threshold:.35});
+  io.observe(el); }
+onView(document.getElementById('ablCard'), animateAbl);
+onView(document.getElementById('gapFig'), animateGap);
+
+/* init */
+select(0);
 </script>
 </body>
 </html>

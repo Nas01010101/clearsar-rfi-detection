@@ -1,0 +1,13 @@
+sar_real.jpg
+============
+Real Copernicus Sentinel-1 C-band SAR scene (Antarctic subglacial-lake outburst /
+elevation-change product). Used as an illustrative SAR backdrop on the project website.
+The image does NOT depict RFI; the amber bands and cyan boxes on the site are
+illustrative of the detection task only.
+
+Source : https://commons.wikimedia.org/wiki/File:Subglacial_lake_outburst_fractures_and_elevation_change_ESA511318.jpg
+License : CC BY-SA 3.0 IGO
+Credit  : Contains modified Copernicus Sentinel data, processed by ESA, CC BY-SA 3.0 IGO
+
+Processing: downscaled to 1600x700 (center crop) and re-compressed for web; displayed
+desaturated/darkened via CSS. No content was added or removed.
