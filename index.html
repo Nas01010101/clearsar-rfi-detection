@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RFI Detection in Sentinel-1 SAR Imagery — IEEE ICIP 2026</title>
+  <title>RFI Detection in Sentinel-1 SAR Imagery · IEEE ICIP 2026</title>
   <meta name="description" content="Pseudo-label distillation and a multi-resolution ensemble for RFI detection in Sentinel-1 SAR quicklooks. ESA ClearSAR Track 1, IEEE ICIP 2026. Interactive walkthrough + charts.">
 
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
@@ -152,7 +152,7 @@
     </div>
     <p class="has-text-centered is-size-7 has-text-grey" style="margin-top:.7rem" id="sceneCredit">
       A real Copernicus <b>Sentinel-1</b> C-band SAR scene (Antarctic subglacial-lake outburst), shown as a SAR backdrop.
-      RFI itself appears as thin, near-full-width horizontal bands (median <b>10&nbsp;px</b> × <b>140&nbsp;px</b>, ≈8:1) — the
+      RFI itself appears as thin, near-full-width horizontal bands (median <b>10&nbsp;px</b> × <b>140&nbsp;px</b>, ≈8:1); the
       amber bands and <span style="color:var(--cyan)">cyan</span> boxes here are <b>illustrative of the detection task</b>, as the ESA ClearSAR RFI imagery is licence-restricted.
       <br><span style="opacity:.8">Image: contains modified Copernicus Sentinel data, processed by ESA, CC BY-SA 3.0 IGO.</span>
     </p>
@@ -174,7 +174,7 @@
           multi-resolution test-time augmentation fused by Weighted Box Fusion (WBF), and a selective
           cross-fold ensemble that drops the domain-overlapping fold.</p>
           <p>On a leak-isolated meta-validation set the distilled student source gains <b>+0.077</b> over a
-          cold baseline — but on genuinely unseen data that source is <b>redundant</b> with the ensemble
+          cold baseline, but on genuinely unseen data that source is <b>redundant</b> with the ensemble
           teacher, and the full stack adds only <b>+0.0021</b> over submitting the teacher alone. We report
           both; the gap between them is the main result.</p>
         </div>
@@ -188,7 +188,7 @@
   <div class="container is-max-desktop">
     <h2 class="title is-3 has-text-centered">How the model works</h2>
     <p class="has-text-centered content" style="max-width:60ch;margin:0 auto 1rem;">
-      Step through the pipeline — each stage shows what the model does and how the detections on the scene above evolve.
+      Step through the pipeline. Each stage shows what the model does and how the detections on the scene above evolve.
     </p>
     <div class="walk-controls">
       <button id="playBtn" class="button is-rounded is-dark"><span class="icon"><i class="fas fa-play"></i></span><span>Play walkthrough</span></button>
@@ -199,9 +199,9 @@
     <div class="panel" style="margin-top:1.25rem;">
       <div>
         <div class="pn" id="pPhase">Stage 1 / 7</div>
-        <h4 id="pName">—</h4>
-        <p class="pwhat" id="pWhat">—</p>
-        <div class="pparams" id="pParams">—</div>
+        <h4 id="pName">&nbsp;</h4>
+        <p class="pwhat" id="pWhat">&nbsp;</p>
+        <div class="pparams" id="pParams">&nbsp;</div>
       </div>
       <div><canvas class="vizbox" id="viz" width="480" height="360"></canvas></div>
     </div>
@@ -215,7 +215,7 @@
 
     <!-- animated ablation chart -->
     <div class="chart-card" id="ablCard" style="margin-bottom:1.5rem;">
-      <p class="has-text-weight-semibold">Building the honest student source <span class="has-text-grey is-size-7">— leak-isolated meta-validation, animated</span></p>
+      <p class="has-text-weight-semibold">Building the honest student source <span class="has-text-grey is-size-7">· leak-isolated meta-validation, animated</span></p>
       <svg id="ablChart" viewBox="0 0 640 280" style="width:100%;height:auto;"></svg>
       <div class="legend">
         <span><i style="background:#d98a1f"></i>AP</span>
@@ -248,7 +248,7 @@
     <!-- interactive blend slider -->
     <div class="slider-card" style="margin-top:2rem;">
       <p class="has-text-weight-semibold has-text-centered">Try it: the blend weight <span class="mono">w</span></p>
-      <p class="has-text-centered is-size-7 has-text-grey">Drag to the three submitted weights. Adding the leak-free source <em>lowers</em> the leaked validation score while <em>raising</em> the honest held-out test — up to w = 0.25.</p>
+      <p class="has-text-centered is-size-7 has-text-grey">Drag to the three submitted weights. Adding the leak-free source <em>lowers</em> the leaked validation score while <em>raising</em> the honest held-out test, up to w = 0.25.</p>
       <input type="range" id="wSlider" min="0" max="2" step="1" value="1" aria-label="Blend weight">
       <div class="wlabels"><span>w = 0.00</span><span>w = 0.25</span><span>w = 0.375</span></div>
       <div class="slider-row">
@@ -263,22 +263,22 @@
 <!-- ============ TAKEAWAY ============ -->
 <section class="section" id="Takeaway">
   <div class="container is-max-desktop">
-    <h2 class="title is-3 has-text-centered">Honest takeaway</h2>
+    <h2 class="title is-3 has-text-centered">Diminishing returns</h2>
     <div class="takeaway">
       <p>
         Stepping back: most of this pipeline is a study in diminishing returns. The pseudo-label
         distillation, multi-resolution TTA, fold-dropping, and blending each add real complexity,
-        but on genuinely unseen data they buy almost nothing — the full stack sits within noise of
+        but on genuinely unseen data they buy almost nothing. The full stack sits within noise of
         just submitting a decent ensemble teacher.
       </p>
       <p>
         And the cost is not free. Every one of these micro-optimizations makes the model harder to
-        reason about, harder to reproduce, and harder to trust — for a gain that wouldn't survive
+        reason about, harder to reproduce, and harder to trust, for a gain that wouldn't survive
         contact with a real deployment, where a single robust ensemble wins on every axis that
         actually matters. None of this is likely to be used in practice.
       </p>
       <p class="closer">
-        So: mediocre numbers, but a genuinely useful lesson in what <em>doesn't</em> transfer —
+        So: mediocre numbers, but a genuinely useful lesson in what <em>doesn't</em> transfer,
         which is the part worth writing down.
       </p>
     </div>
@@ -354,12 +354,12 @@ function drawScene(stage){
 /* ---------- architecture walkthrough ---------- */
 var STAGES=[
   {n:'Base detector', what:'Five YOLO26x detectors are trained on stratified folds of the 3,154 labelled images, with CLAHE contrast and a pixel-space NWD loss so thin, non-overlapping boxes still get a gradient.', params:'5 folds · 640 px · MuSGD · NWD α=0.5, C=12.8', viz:'folds'},
-  {n:'Ensemble teacher (V12)', what:'The five folds (plus an RF-DETR member) are fused with Weighted Box Fusion — overlapping detections are averaged, not discarded — into a strong teacher scoring 0.4755.', params:'WBF · IoU 0.70 · conf-type max → 0.4755', viz:'wbf'},
+  {n:'Ensemble teacher (V12)', what:'The five folds (plus an RF-DETR member) are fused with Weighted Box Fusion (overlapping detections are averaged, not discarded) into a strong teacher scoring 0.4755.', params:'WBF · IoU 0.70 · conf-type max → 0.4755', viz:'wbf'},
   {n:'Pseudo-label the test set', what:'The teacher labels the 786 unlabelled test images, keeping only confident boxes. This turns the test set into extra, in-distribution training signal.', params:'conf ≥ 0.75 · ≤20 boxes/img → 600 images', viz:'pseudo'},
-  {n:'Student fine-tune', what:'Per-fold students are fine-tuned on the pseudo-labelled data with the backbone frozen for 10 epochs — distilling the teacher’s knowledge into single models.', params:'folds 1,2,4 · AdamW 1e-4 · freeze 10 · 15 ep', viz:'student'},
+  {n:'Student fine-tune', what:'Per-fold students are fine-tuned on the pseudo-labelled data with the backbone frozen for 10 epochs, distilling the teacher’s knowledge into single models.', params:'folds 1,2,4 · AdamW 1e-4 · freeze 10 · 15 ep', viz:'student'},
   {n:'Multi-resolution TTA', what:'Each student runs at four input sizes; thin stripes resolve unevenly across scales, so fusing them with WBF recovers boxes any single resolution misses.', params:'608 / 640 / 672 / 704 px · WBF', viz:'tta'},
-  {n:'Selective cross-fold', what:'The per-fold sources are fused — but fold-0 overlaps the validation pool and drags the consensus, so dropping it (a smaller ensemble) is net-positive.', params:'WBF(f1,f2,f4), drop f0 → S*', viz:'drop'},
-  {n:'Blend → V17', what:'The honest super-source S* is blended into the teacher at a conservative weight. On unseen data this adds only +0.0021 over the teacher — the paper’s central finding.', params:'WBF(V12, S* @ w=0.25) → 0.4776', viz:'blend'}
+  {n:'Selective cross-fold', what:'The per-fold sources are fused, but fold-0 overlaps the validation pool and drags the consensus, so dropping it (a smaller ensemble) is net-positive.', params:'WBF(f1,f2,f4), drop f0 → S*', viz:'drop'},
+  {n:'Blend → V17', what:'The honest super-source S* is blended into the teacher at a conservative weight. On unseen data this adds only +0.0021 over the teacher, the paper’s central finding.', params:'WBF(V12, S* @ w=0.25) → 0.4776', viz:'blend'}
 ];
 var cur=0, timer=null;
 var stepsEl=document.getElementById('steps');
@@ -501,9 +501,9 @@ function animateGap(){
 
 /* ---------- interactive blend slider ---------- */
 var W_VALS=[0,0.25,0.375], TESTV=[0.4755,0.4776,0.4768], VALV=[0.5154,0.5148,0.5135];
-var NOTES=[ 'w = 0 → <b>0.4755</b> — the teacher alone (V12).',
+var NOTES=[ 'w = 0 → <b>0.4755</b>, the teacher alone (V12).',
             'w = 0.25 → <b>0.4776</b>, the best official score (V17).',
-            'w = 0.375 → <b>0.4768</b> — pushing harder regresses.' ];
+            'w = 0.375 → <b>0.4768</b>, pushing harder regresses.' ];
 var wS=document.getElementById('wSlider');
 function updW(){ var i=+wS.value; document.getElementById('roVal').textContent=VALV[i].toFixed(4);
   document.getElementById('roTest').textContent=TESTV[i].toFixed(4); document.getElementById('wNote').innerHTML=NOTES[i];
