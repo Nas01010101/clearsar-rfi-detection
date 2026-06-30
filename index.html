@@ -99,6 +99,9 @@
 
     /* blend slider */
     .slider-card{ border:1px solid #ececec; border-radius:12px; padding:1.75rem; background:#fcfbf9; }
+    .takeaway{ max-width:62ch; margin:1.5rem auto 0; border-left:3px solid var(--amber-h); padding:.25rem 0 .25rem 1.5rem; }
+    .takeaway p{ color:#3a3f48; line-height:1.65; margin-bottom:1rem; }
+    .takeaway .closer{ color:var(--ink); font-weight:600; margin-bottom:0; }
     .slider-row{ display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-top:1.25rem; }
     .readout{ text-align:center; border:1px solid #eee; border-radius:10px; padding:1rem; background:#fff; }
     .readout .rl{ font:600 11px/1 monospace; letter-spacing:.08em; text-transform:uppercase; color:#999; }
@@ -253,6 +256,31 @@
         <div class="readout"><div class="rl">Official held-out test</div><div class="rv" id="roTest" style="color:var(--amber-h)">0.4776</div></div>
       </div>
       <p class="has-text-centered is-size-7 has-text-grey" style="margin-top:.8rem;" id="wNote">w = 0.25 → <b>0.4776</b>, the best official score (V17).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TAKEAWAY ============ -->
+<section class="section" id="Takeaway">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Honest takeaway</h2>
+    <div class="takeaway">
+      <p>
+        Stepping back: most of this pipeline is a study in diminishing returns. The pseudo-label
+        distillation, multi-resolution TTA, fold-dropping, and blending each add real complexity,
+        but on genuinely unseen data they buy almost nothing — the full stack sits within noise of
+        just submitting a decent ensemble teacher.
+      </p>
+      <p>
+        And the cost is not free. Every one of these micro-optimizations makes the model harder to
+        reason about, harder to reproduce, and harder to trust — for a gain that wouldn't survive
+        contact with a real deployment, where a single robust ensemble wins on every axis that
+        actually matters. None of this is likely to be used in practice.
+      </p>
+      <p class="closer">
+        So: mediocre numbers, but a genuinely useful lesson in what <em>doesn't</em> transfer —
+        which is the part worth writing down.
+      </p>
     </div>
   </div>
 </section>
