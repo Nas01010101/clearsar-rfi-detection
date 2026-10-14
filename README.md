@@ -61,7 +61,7 @@ Full details, equations and ablations are in the [paper](docs/clearsar_paper.pdf
 
 ## Results
 
-Two measurements, deliberately kept separate (this is the paper's main point — see the ICIP'26 reviewer responses below).
+Two measurements, deliberately kept separate (this is the paper's main point).
 
 **(a) Construction of the student source** — on the 401-image leak-isolated meta-validation set, size/IoU-stratified (pycocotools; reproducible via `scripts/verify_ablation.py`):
 

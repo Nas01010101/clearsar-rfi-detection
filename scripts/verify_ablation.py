@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Reproduce the leak-isolated meta-validation ablation chain for the ICIP
-camera-ready revision (reviewer TP-1018).
+"""Reproduce the leak-isolated meta-validation ablation chain for the
+paper revision.
 
 Each pipeline stage is scored on the 401-image meta-validation set with
 pycocotools, from the saved per-fold / per-resolution prediction JSONs. The
