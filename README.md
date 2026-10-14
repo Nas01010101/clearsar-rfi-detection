@@ -1,11 +1,10 @@
 # RFI Detection in Sentinel-1 SAR Imagery
 
 **Pseudo-label distillation + multi-resolution ensemble for Radio-Frequency Interference detection.**
-Solution to the ESA **ClearSAR Track 1** Grand Challenge — *"Houston, You Copy?"* (AI4QC). The extended abstract was **accepted to the ESA ClearSAR Grand Challenge (GC-3) at IEEE ICIP 2026** (Tampere, Finland, Sept 2026).
+Solution to the ESA **ClearSAR Track 1** Grand Challenge — *"Houston, You Copy?"* (AI4QC).
 
 [![Website](https://img.shields.io/badge/project-website-2ea44f.svg)](https://nas01010101.github.io/clearsar-rfi-detection/)
 [![Paper](https://img.shields.io/badge/paper-PDF-b31b1b.svg)](docs/clearsar_paper.pdf)
-[![Extended Abstract](https://img.shields.io/badge/ICIP%202026-abstract%20accepted-004080.svg)](docs/clearsar_abstract_2p.pdf)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -108,7 +107,7 @@ Documented because they cost real compute and may save someone else theirs:
 ```
 docs/
   clearsar_paper.pdf        # 5-page technical report
-  clearsar_abstract_2p.pdf  # 2-page IEEE ICIP 2026 extended abstract
+  clearsar_abstract_2p.pdf  # 2-page extended abstract
   clearsar_paper.tex        # LaTeX sources (spconf.sty + IEEEbib.bst)
 scripts/
   coco2yolo.py              # COCO -> YOLO label conversion
@@ -151,14 +150,14 @@ Data is **not** redistributed here (ESA EOTDL licensing — challenge rule: no e
 ## Paper
 
 Full method, ablations and negative results: **[`docs/clearsar_paper.pdf`](docs/clearsar_paper.pdf)**.
-The 2-page extended abstract **accepted to the ESA ClearSAR Grand Challenge (GC-3) at IEEE ICIP 2026**: **[`docs/clearsar_abstract_2p.pdf`](docs/clearsar_abstract_2p.pdf)**.
+2-page extended abstract: **[`docs/clearsar_abstract_2p.pdf`](docs/clearsar_abstract_2p.pdf)**.
 
 ```bibtex
 @misc{elghoudane2026rfi,
   title  = {RFI Detection in Sentinel-1 SAR Imagery via Pseudo-Label
             Distillation and Multi-Resolution Ensemble},
   author = {Elghoudane, Anas},
-  note   = {ESA ClearSAR Track 1 Grand Challenge, IEEE ICIP 2026},
+  note   = {ESA ClearSAR Track 1 Grand Challenge},
   year   = {2026}
 }
 ```

@@ -17,7 +17,7 @@ keywords:
   - ensemble
 abstract: >-
   Solution to the ESA ClearSAR Track 1 Grand Challenge (Radio-Frequency
-  Interference detection in Sentinel-1 SAR quicklooks) at IEEE ICIP 2026.
+  Interference detection in Sentinel-1 SAR quicklooks).
   A single-GPU pipeline combining a YOLO26x detector with pixel-space
   Normalised Wasserstein Distance loss, pseudo-label distillation from a
   multi-source ensemble teacher, multi-resolution test-time augmentation
